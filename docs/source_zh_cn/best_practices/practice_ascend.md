@@ -1,6 +1,6 @@
 # 基于昇腾800I-A2测评DeepSeek-R1数学能力，100%论文复现
 ### 复现使用的aisbench评测工具版本
-本文复现使用aisbench测评工具版本为[v3.0-20250331](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250331)
+本文复现使用aisbench测评工具版本为[v3.0-20250331](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250331)
 ### 一 背景与目标
 
 #### 1. 1复现意义
@@ -37,7 +37,7 @@ MATH-500数据集：
 | 推理硬件型号      |  Atlas 800I  A2  | 单卡64G显存 |
 | MindIE镜像版本 |   MindIE T6 B022 |         |
 | 量化方式       |  W8A8  |      [MindStudio ModelSlim，昇腾模型压缩工具](https://gitee.com/ascend/msit/tree/master/msmodelslim)   |
-|    测评工具          |  AISbench  |     [AISBench benchmark大模型评测工具](https://gitee.com/aisbench/benchmark/tree/master)    |
+|    测评工具          |  AISbench  |     [AISBench benchmark大模型评测工具](https://github.com/AISBench/benchmark/tree/master)    |
 
 #### 2.2 环境配置
 ##### 2.2.1 下载权重
@@ -367,7 +367,7 @@ source /路径/set_env.sh
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt

@@ -52,7 +52,7 @@ ais_bench [OPTIONS]
 
 ## 配置常量文件参数
 
-部分全局常量不区分任务类型，推荐保持默认；如需自定义，可编辑常量文件：[`global_consts.py`](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/global_consts.py)配置。
+部分全局常量不区分任务类型，推荐保持默认；如需自定义，可编辑常量文件：[`global_consts.py`](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/global_consts.py)配置。
 当前支持的参数配置如下：
 | 参数名| 说明| 取值范围 / 要求 |
 | ----------- | ----------- | ----------- |

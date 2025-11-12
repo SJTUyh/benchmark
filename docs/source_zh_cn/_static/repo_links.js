@@ -6,7 +6,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // 创建Gitee仓库链接
     var githubLink = document.createElement('a');
-    githubLink.href = 'https://github.com/aisbench/benchmark'; // Gitee仓库地址
+    githubLink.href = 'https://github.com/AISBench/benchmark'; // GitHub仓库地址
     githubLink.target = '_blank';
     githubLink.className = 'project-link';
     githubLink.innerHTML = '<i class="fa fa-github"></i> GitHub';

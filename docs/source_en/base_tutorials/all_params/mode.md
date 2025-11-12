@@ -118,7 +118,7 @@ graph LR;
   D --> E[Generate a summary report based on performance data]
   E --> F((Display Results))
 ```
-> ⚠️ **Note**: In the performance evaluation scenario, `--models` only supports streaming service-oriented inference APIs (refer to [Service-Oriented Inference Backend](./models.md#service-oriented-inference-backend)), such as [`vllm_api_general_stream`](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py).
+> ⚠️ **Note**: In the performance evaluation scenario, `--models` only supports streaming service-oriented inference APIs (refer to [Service-Oriented Inference Backend](./models.md#service-oriented-inference-backend)), such as [`vllm_api_general_stream`](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py).
 
 Command Example:
 ```shell

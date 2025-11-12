@@ -15,7 +15,7 @@ This command does not specify other command-line options, so it defaults to an a
 The specific information (introduction, usage constraints, etc.) of the selected model task `vllm_api_general_chat`, dataset task `demo_gsm8k_gen_4_shot_cot_chat_prompt`, and result presentation task `example` can be queried from the following links respectively:
 - `--models`: 📚 [Service-Oriented Inference Backend](../base_tutorials/all_params/models.md#service-oriented-inference-backend)
 
-- `--datasets`: 📚 [Open Source Datasets](../base_tutorials/all_params/datasets.md#open-source-datasets) → 📚 [Detailed Introduction](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/demo/README_en.md)
+- `--datasets`: 📚 [Open Source Datasets](../base_tutorials/all_params/datasets.md#open-source-datasets) → 📚 [Detailed Introduction](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/demo/README_en.md)
 
 - `--summarizer`: 📚 [Result Summary Tasks](../base_tutorials/all_params/summarizer.md)
 

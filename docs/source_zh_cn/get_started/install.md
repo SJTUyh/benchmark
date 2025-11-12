@@ -16,7 +16,7 @@ conda activate ais_bench
 
 AISBench 当前仅提供源码安装方式，请确保安装环境联网：
 ```shell
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./ --use-pep517
 ```

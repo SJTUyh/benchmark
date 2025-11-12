@@ -57,7 +57,7 @@ Effective only when the mode is `perf` or `perf_viz`.
 
 
 ## Configuration Constant File Parameters
-Some global constants are not restricted by task type, and it is recommended to keep their default values. If customization is required, edit the constant file: [`global_consts.py`](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/global_consts.py) for configuration.
+Some global constants are not restricted by task type, and it is recommended to keep their default values. If customization is required, edit the constant file: [`global_consts.py`](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/global_consts.py) for configuration.
 
 The currently supported parameter configurations are as follows:
 

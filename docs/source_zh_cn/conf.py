@@ -48,7 +48,7 @@ source_suffix = {
 # 添加源文件编码配置
 source_encoding = 'utf-8'
 
-# 5. 配置文档版本（与 Gitee 仓库分支对应，如 v1.0）
+# 5. 配置文档版本（与 GitHub 仓库分支对应，如 v1.0）
 version = '1.0'
 release = '1.0'
 

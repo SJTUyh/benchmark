@@ -116,7 +116,7 @@ graph LR;
   D --> E[基于性能数据生成汇总报告]
   E --> F((呈现结果))
 ```
-> ⚠️ 注意： 性能评测场景下，`--models` 仅支持流式服务化推理 API（参考 [服务化推理API后端](./models.md#服务化推理后端)），例如 [`vllm_api_general_stream`](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py)。
+> ⚠️ 注意： 性能评测场景下，`--models` 仅支持流式服务化推理 API（参考 [服务化推理API后端](./models.md#服务化推理后端)），例如 [`vllm_api_general_stream`](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py)。
 
 命令示例：
 ```shell

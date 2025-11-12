@@ -19,7 +19,7 @@ Among them:
 ### Task Meaning Query (Optional)
 Specific information (introduction, usage constraints, etc.) about the selected model task `vllm_api_stream_chat`, dataset task `demo_gsm8k_gen_4_shot_cot_chat_prompt`, and result presentation task `default_perf` can be queried from the following links:
 - `--models`: 📚 [Service-Oriented Inference Backend](../all_params/models.md#service-oriented-inference-backend)
-- `--datasets`: 📚 [Open-Source Datasets](../all_params/datasets.md#open-source-datasets) → 📚 [Detailed Introduction](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/demo/README_en.md)
+- `--datasets`: 📚 [Open-Source Datasets](../all_params/datasets.md#open-source-datasets) → 📚 [Detailed Introduction](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/demo/README_en.md)
 - `--summarizer`: 📚 [Result Summary Tasks](../all_params/summarizer.md#supported-result-summary-tasks)
 
 ### Preparations Before Running the Command
@@ -186,10 +186,10 @@ Users can specify multiple configuration tasks through the `--models` and `--dat
 ais_bench --models vllm_api_general_stream vllm_api_stream_chat --datasets gsm8k_gen_4_shot_cot_str aime2024_gen_0_shot_str --mode perf
 ```
 The above command specifies 2 model tasks (`vllm_api_general_stream` and `vllm_api_stream_chat`) and 2 dataset tasks (`gsm8k_gen_4_shot_cot_str` and `aime2024_gen_0_shot_str`), and will execute the following 4 combined performance test tasks:
-+ [vllm_api_general_stream](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py) model task + [gsm8k_gen_4_shot_cot_str](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/gsm8k/gsm8k_gen_4_shot_cot_str.py) dataset task
-+ [vllm_api_general_stream](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py) model task + [aime2024_gen_0_shot_str](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/aime2024/aime2024_gen_0_shot_str) dataset task
-+ [vllm_api_stream_chat](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_stream_chat.py) model task + [gsm8k_gen_4_shot_cot_str](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/gsm8k/gsm8k_gen_4_shot_cot_str.py) dataset task
-+ [vllm_api_stream_chat](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_stream_chat.py) model task + [aime2024_gen_0_shot_str](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/aime2024/aime2024_gen_0_shot_str.py) dataset task
++ [vllm_api_general_stream](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py) model task + [gsm8k_gen_4_shot_cot_str](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/gsm8k/gsm8k_gen_4_shot_cot_str.py) dataset task
++ [vllm_api_general_stream](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_general_stream.py) model task + [aime2024_gen_0_shot_str](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/aime2024/aime2024_gen_0_shot_str) dataset task
++ [vllm_api_stream_chat](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_stream_chat.py) model task + [gsm8k_gen_4_shot_cot_str](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/gsm8k/gsm8k_gen_4_shot_cot_str.py) dataset task
++ [vllm_api_stream_chat](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/models/vllm_api/vllm_api_stream_chat.py) model task + [aime2024_gen_0_shot_str](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/aime2024/aime2024_gen_0_shot_str.py) dataset task
 
 #### Modifying Configuration Files Corresponding to Tasks
 The actual paths of the configuration files corresponding to model tasks and dataset tasks can be queried by executing the command with `--search`:
@@ -314,7 +314,7 @@ For custom sequence length evaluation, you need to specify the special dataset t
 ```bash
 ais_bench --models vllm_api_stream_chat --datasets synthetic_gen -m perf
 ```
-If you want to conduct performance tests for a specific input length distribution, you first need to configure the distribution configuration file `synthetic_config.py` for `synthetic_gen` (available at [synthetic_config.py](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/datasets/synthetic/synthetic_config.py)). The configuration content is as follows:
+If you want to conduct performance tests for a specific input length distribution, you first need to configure the distribution configuration file `synthetic_config.py` for `synthetic_gen` (available at [synthetic_config.py](https://github.com/AISBench/benchmark/tree/master/ais_bench/datasets/synthetic/synthetic_config.py)). The configuration content is as follows:
 ```python
 synthetic_config = {
     "Type": "string",
@@ -336,7 +336,7 @@ synthetic_config = {
 #### 2 Ensure the Inference Service Reaches the Set Maximum Output
 To ensure the inference service achieves the set maximum output, you need to configure the special post-processing parameter `ignore_eos = True` in `generation_kwargs` of the 📚 [Service-Oriented Model Configuration](../all_params/models.md#description-of-service-oriented-inference-backend-configuration-parameters) to control the maximum output length of requests (preventing early termination).
 
-For example, modify the content of the configuration file [vllm_api_stream_chat.py](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/models/vllm_api/vllm_api_stream_chat.py) corresponding to the `vllm_api_stream_chat` model task:
+For example, modify the content of the configuration file [vllm_api_stream_chat.py](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/models/vllm_api/vllm_api_stream_chat.py) corresponding to the `vllm_api_stream_chat` model task:
 ```python
 from ais_bench.benchmark.models import VLLMCustomAPIChatStream
 models = [

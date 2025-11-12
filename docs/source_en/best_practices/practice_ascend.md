@@ -1,6 +1,6 @@
 # Evaluating DeepSeek-R1's Mathematical Capabilities Based on Ascend 800I-A2: 100% Paper Reproduction
 ### Version of AISBench Evaluation Tool Used for Reproduction
-The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250331](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250331).
+The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250331](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250331).
 
 ### I. Background and Objectives
 #### 1.1 Significance of Reproduction
@@ -35,7 +35,7 @@ Through the AISBench evaluation tool, fully reproduce the official evaluation sc
 | Inference Hardware Model| Atlas 800I A2              | Single card with 64GB VRAM       |
 | MindIE Image Version    | MindIE T6 B022             |                                  |
 | Quantization Method     | W8A8                       | [MindStudio ModelSlim, Ascend Model Compression Tool](https://gitee.com/ascend/msit/tree/master/msmodelslim) |
-| Evaluation Tool         | AISbench                   | [AISBench Benchmark Large Model Evaluation Tool](https://gitee.com/aisbench/benchmark/tree/master) |
+| Evaluation Tool         | AISbench                   | [AISBench Benchmark Large Model Evaluation Tool](https://github.com/AISBench/benchmark/tree/master) |
 
 #### 2.2 Environment Configuration
 ##### 2.2.1 Download Weights
@@ -367,7 +367,7 @@ Outside the image, install the aisbench evaluation tool:
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt

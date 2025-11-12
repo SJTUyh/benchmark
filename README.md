@@ -13,15 +13,12 @@
 [![][github-forks-shield]][github-forks-link]
 [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link]
-[![][github-license-shield]][github-license-link]
-
-要不要我帮你生成一份**GitHub仓库README.md专属徽章配置指南**，包含徽章参数说明、适配逻辑和实时调试建议？
 [![License](https://img.shields.io/badge/license-Apache--2.0-red?logo=apache)](https://www.apache.org/licenses/LICENSE-2.0)
 <br><br>
 [🌐官方网站](https://www.aisbench.com) |
 [📖工具文档](https://ais-bench-benchmark-rf.readthedocs.io/zh-cn/latest/) |
 [🔥最新进展](#-最新进展)|
-[🤔报告问题](https://github.com/aisbench/benchmark/issues/new/choose)
+[🤔报告问题](https://github.com/AISBench/benchmark/issues/new/choose)
 <br><br>简体中文 | [English](README_en.md)
 </div>
 
@@ -81,7 +78,7 @@ conda activate ais_bench
 
 AISBench 当前仅提供源码安装方式，请确保安装环境联网：
 ```shell
-git clone https://github.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./ --use-pep517
 ```

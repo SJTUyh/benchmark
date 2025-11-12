@@ -1,6 +1,6 @@
 # Evaluating the Mathematical Capabilities of DeepSeek-R1-Distill-Qwen-14B Based on NVIDIA A100 Accelerator Card: 100% Paper Reproduction
 ### Version of AISBench Evaluation Tool Used for Reproduction
-The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250412](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250412).
+The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250412](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250412).
 
 
 ### I. Background and Objectives
@@ -80,7 +80,7 @@ Download BF16 model weights directly from Hugging Face (or its mirror site hf-mi
 
 
 ### III. Deploying Model Weights in A100 Environment
-The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250331](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250331). The methods for deploying model weights differ between the "local Hugging Face pure model deployment scenario" and the "vLLM service-oriented deployment scenario".
+The version of the AISBench evaluation tool used for reproduction in this paper is [v3.0-20250331](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250331). The methods for deploying model weights differ between the "local Hugging Face pure model deployment scenario" and the "vLLM service-oriented deployment scenario".
 
 #### Local Hugging Face Pure Model Deployment Scenario
 1. Install the AISBench evaluation tool:
@@ -88,7 +88,7 @@ The version of the AISBench evaluation tool used for reproduction in this paper 
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt
@@ -104,7 +104,7 @@ The dependencies installed during the AISBench installation process are sufficie
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt

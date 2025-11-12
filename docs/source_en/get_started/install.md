@@ -16,7 +16,7 @@ conda activate ais_bench
 
 Currently, AISBench only provides the source code installation method. Ensure the installation environment has internet access:
 ```shell
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./ --use-pep517
 ```

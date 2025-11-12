@@ -1,6 +1,6 @@
 # 基于英伟达A100加速卡测评DeepSeek-R1-Distill-Qwen-14B的数学能力，100%论文复现
 ### 复现使用的aisbench评测工具版本
-本文复现使用aisbench测评工具版本为[v3.0-20250412](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250412)
+本文复现使用aisbench测评工具版本为[v3.0-20250412](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250412)
 ### 一 背景与目标
 
 #### 1. 1 复现意义
@@ -74,7 +74,7 @@ vllm==0.6.6.post1
 
 
 ### 三、A100环境部署模型权重
-本文复现使用aisbench测评工具版本为[v3.0-20250331](https://gitee.com/aisbench/benchmark/releases/tag/v3.0-20250331)
+本文复现使用aisbench测评工具版本为[v3.0-20250331](https://github.com/AISBench/benchmark/releases/tag/v3.0-20250331)
 "本地huggingface纯模型部署场景"和"vllm服务化部署场景"部署模型权重方式不同
 #### 本地huggingface纯模型部署场景
 1. 安装aisbench 测评工具
@@ -82,7 +82,7 @@ vllm==0.6.6.post1
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt
@@ -97,7 +97,7 @@ pip3 install -r requirements/api.txt
 conda create --name ais_bench python=3.10 -y
 conda activate ais_bench
 
-git clone https://gitee.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./
 pip3 install -r requirements/api.txt

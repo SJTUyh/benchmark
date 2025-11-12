@@ -32,7 +32,7 @@ ais_bench --models vllm_api_stream_chat_multiturn --datasets sharegpt_gen --debu
 - `--datasets`指定了数据集任务，即`sharegpt_gen`数据集任务。
 ### 运行命令前置准备
 - `--models`: 使用`vllm_api_stream_chat_multiturn`模型任务，需要准备支持`v1/chat/completions`子服务的推理服务，可以参考🔗 [VLLM启动OpenAI 兼容服务器](https://docs.vllm.com.cn/en/latest/getting_started/quickstart.html#openai-compatible-server)启动推理服务
-- `--datasets`: 使用`sharegpt_gen`数据集任务，需要参考🔗 [ShareGPT数据集](https://gitee.com/aisbench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/sharegpt/README.md)准备sharegpt数据集。
+- `--datasets`: 使用`sharegpt_gen`数据集任务，需要参考🔗 [ShareGPT数据集](https://github.com/AISBench/benchmark/tree/master/ais_bench/benchmark/configs/datasets/sharegpt/README.md)准备sharegpt数据集。
 ### 任务对应配置文件修改
 每个模型任务、数据集任务和结果呈现任务都对应一个配置文件，运行命令前需要修改这些配置文件的内容。这些配置文件路径可以通过在原有AISBench命令基础上加上`--search`来查询，例如：
 ```shell

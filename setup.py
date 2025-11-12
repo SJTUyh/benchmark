@@ -155,7 +155,7 @@ def do_setup():
         name='ais_bench_benchmark',
         version= get_latest_version(),
         description=f'A comprehensive toolkit for large model evaluation, commit id: {get_commit_id()}, commit date: {get_commit_date()}',
-        url='https://github.com/aisbench/benchmark',
+        url='https://github.com/AISBench/benchmark',
         long_description=readme(),
         long_description_content_type='text/markdown',
         maintainer='AISBench Authors',

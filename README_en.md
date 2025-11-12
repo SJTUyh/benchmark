@@ -13,13 +13,13 @@
 [![][github-forks-shield]][github-forks-link]
 [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link]
-[![][github-license-shield]][github-license-link]
+[![License](https://img.shields.io/badge/license-Apache--2.0-red?logo=apache)](https://www.apache.org/licenses/LICENSE-2.0)
 
 <br><br>
 [🌐 Official Website](https://www.aisbench.com) |
 [📖 Tool Documentation](https://ais-bench-benchmark-rf.readthedocs.io/en/latest/) |
 [🔥 Latest Updates](#-latest-updates)|
-[🤔 Report Issues](https://github.com/aisbench/benchmark/issues/new/choose)
+[🤔 Report Issues](https://github.com/AISBench/benchmark/issues/new/choose)
 <br><br>[简体中文](README.md) | English
 </div>
 
@@ -82,7 +82,7 @@ conda activate ais_bench
 
 AISBench currently only provides source code installation. Ensure the installation environment has internet access:
 ```shell
-git clone https://github.com/aisbench/benchmark.git
+git clone https://github.com/AISBench/benchmark.git
 cd benchmark/
 pip3 install -e ./ --use-pep517
 ```
