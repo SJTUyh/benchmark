@@ -30,3 +30,11 @@ If this PR introduces a new feature, it is better to list some use cases here an
 
 - [ ] If the modification has potential influence on downstream or other related projects, this PR should be tested with those projects.
 - [ ] CLA has been signed and all committers have signed the CLA in this PR.
+
+## 🌟 Useful CI Command
+|   Command   |   Introduction   |
+| ---- | ----- |
+|`/gemini review`| Performs a code review for the current pull request in its current state by Gemini. |
+|`/gemini summary`| Provides a summary of the current pull request in its current state by Gemini. |
+|`/gemini help`| Displays a list of available commands of Gemini. |
+|`/readthedocs build`| Triggers a build of the documentation for the current pull request in its current state by Read the Docs. |
