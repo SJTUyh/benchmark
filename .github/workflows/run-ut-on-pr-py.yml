@@ -19,23 +19,19 @@ env:
   PY310_VERSION: 3.10.12
 jobs:
   pr_run_test:
-    runs-on: [self-hosted, Linux, X64, 66_19]
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Prepare - Install benchmark
         run: |
-          export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${HOME}/local_bin/python-${PY310_VERSION}/lib"
-          source ${HOME}/virtualenvs/workon310/bin/activate
           pip3 install -e ./ --use-pep517
           pip3 install -r requirements/api.txt
           pip3 install -r requirements/extra.txt
           pip3 install -r requirements/datasets/bfcl_dependencies.txt --no-deps
       - name: Run Test
         run: |
-          export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${HOME}/local_bin/python-${PY310_VERSION}/lib"
-          source ${HOME}/virtualenvs/workon310/bin/activate
           pip3 install pytest pytest-cov pytest-xdist
           python3 tests/run_tests.py tests/UT -p 16
 
@@ -68,8 +64,6 @@ jobs:
       - name:  Uninstall benchmark
         if: always()
         run: |
-          export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${HOME}/local_bin/python-${PY310_VERSION}/lib"
-          source ${HOME}/virtualenvs/workon310/bin/activate
           pip3 uninstall ais_bench_benchmark -y
           if [ $? -ne 0 ]; then
             echo "[ERROR] Uninstall benchmark failed. "
