@@ -7,7 +7,7 @@ import json
 import argparse
 import sys
 
-def update_request_rate(host, port, force_reset, new_rate):
+def update_request_rate(host, port, new_rate):
     """向TokenProducer socket服务发送新的请求速率"""
     try:
         # 创建socket连接
@@ -18,7 +18,6 @@ def update_request_rate(host, port, force_reset, new_rate):
         # 准备请求数据
         request = {
             "request_rate": new_rate,
-            "force_reset": force_reset,
         }
         request_data = json.dumps(request).encode('utf-8')
 
@@ -44,8 +43,7 @@ def main():
     parser = argparse.ArgumentParser(description='Update TokenProducer request rate via socket')
     parser.add_argument('--host', default='localhost', help='TokenProducer server host (default: localhost)')
     parser.add_argument('--port', type=int, default=8888, help='TokenProducer server port (default: 8888)')
-    parser.add_argument('--force-reset', help="Whether to clean the accumulated tokens", action='store_true', default=False)
-    parser.add_argument('rate', type=float, help='New request rate (RPS)')
+    parser.add_argument('--rate', type=float, help='New request rate (RPS)')
 
     args = parser.parse_args()
 
@@ -56,7 +54,7 @@ def main():
 
     # 发送请求
     print(f"向 {args.host}:{args.port} 发送请求，更新速率为 {args.rate} RPS...")
-    response = update_request_rate(args.host, args.port, args.force_reset, args.rate)
+    response = update_request_rate(args.host, args.port, args.rate)
 
     # 显示响应
     if response['status'] == 'success':
