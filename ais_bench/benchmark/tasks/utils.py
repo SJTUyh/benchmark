@@ -1,6 +1,9 @@
 import os
 import time
 import struct
+import socket
+import threading
+import json
 from collections import OrderedDict
 from typing import Dict, List, Any
 from multiprocessing import Event, shared_memory, BoundedSemaphore
@@ -366,6 +369,128 @@ class ProgressBar:
             self._draw_progress()
 
 
+class RequestRateServer:
+    """Socket server for dynamically updating request_rate in TokenProducer.
+
+    This server runs in a separate thread and listens for incoming connections
+    to update the request_rate of a TokenProducer instance at runtime.
+    """
+
+    def __init__(self, token_producer, host='localhost', port=8888):
+        """
+        Args:
+            token_producer: TokenProducer instance to control
+            host: Host address to bind the server
+            port: Port number to listen on
+        """
+        self.token_producer = token_producer
+        self.host = host
+        self.port = port
+        self.server_socket = None
+        self.server_thread = None
+        self.stop_event = threading.Event()
+        self.logger = AISLogger()
+
+    def start(self):
+        """Start the socket server in a separate thread."""
+        self.server_thread = threading.Thread(target=self._run_server, daemon=True)
+        self.server_thread.start()
+        self.logger.info(f"RequestRateServer started on {self.host}:{self.port}")
+
+    def stop(self):
+        """Stop the socket server."""
+        self.stop_event.set()
+        if self.server_socket:
+            self.server_socket.close()
+        if self.server_thread and self.server_thread.is_alive():
+            self.server_thread.join(timeout=1.0)
+        self.logger.info("RequestRateServer stopped")
+
+    def _run_server(self):
+        """Main server loop that accepts connections and handles requests."""
+        try:
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.bind((self.host, self.port))
+            self.server_socket.listen(5)
+            self.server_socket.settimeout(1.0)  # Set timeout to allow checking stop_event
+
+            while not self.stop_event.is_set():
+                try:
+                    client_socket, client_address = self.server_socket.accept()
+                    # Handle client in a new thread to allow concurrent connections
+                    client_thread = threading.Thread(
+                        target=self._handle_client,
+                        args=(client_socket, client_address),
+                        daemon=True
+                    )
+                    client_thread.start()
+                except socket.timeout:
+                    # Timeout occurred, check stop_event and continue
+                    continue
+                except OSError as e:
+                    if self.stop_event.is_set():
+                        break  # Socket closed by stop()
+                    self.logger.error(f"Socket error: {e}")
+                    break
+        except Exception as e:
+            self.logger.error(f"Server error: {e}")
+        finally:
+            if self.server_socket:
+                self.server_socket.close()
+
+    def _handle_client(self, client_socket, client_address):
+        """Handle individual client connection."""
+        try:
+            # Set timeout for client operations
+            client_socket.settimeout(10.0)
+
+            # Receive data
+            data = client_socket.recv(1024)
+            if not data:
+                return
+
+            try:
+                # Parse JSON request
+                request = json.loads(data.decode('utf-8'))
+                new_rate = request.get('request_rate')
+
+                if new_rate is not None and isinstance(new_rate, (int, float)) and new_rate >= 0:
+                    # Update the token producer's request rate
+                    old_rate = self.token_producer.request_rate
+                    self.token_producer.update_request_rate(float(new_rate))
+
+                    # Send success response
+                    response = {
+                        'status': 'success',
+                        'message': f'Request rate updated from {old_rate} to {new_rate}'
+                    }
+                    self.logger.info(f"Updated request rate from {old_rate} to {new_rate}")
+                else:
+                    # Send error response for invalid request
+                    response = {
+                        'status': 'error',
+                        'message': 'Invalid request_rate value. Must be a non-negative number.'
+                    }
+
+                # Send response
+                response_data = json.dumps(response).encode('utf-8')
+                client_socket.send(response_data)
+
+            except json.JSONDecodeError:
+                error_response = {
+                    'status': 'error',
+                    'message': 'Invalid JSON format'
+                }
+                response_data = json.dumps(error_response).encode('utf-8')
+                client_socket.send(response_data)
+
+        except Exception as e:
+            self.logger.error(f"Error handling client {client_address}: {e}")
+        finally:
+            client_socket.close()
+
+
 class TokenProducer:
     """Token generator for controlling request pacing in multi-process scenarios.
 
@@ -380,6 +505,9 @@ class TokenProducer:
         request_num: int = None,
         mode: str = "infer",
         work_dir: str = os.getcwd(),
+        enable_rate_server: bool = False,
+        rate_server_host: str = "localhost",
+        rate_server_port: int = 8888,
     ):
         """
         Args:
@@ -389,6 +517,9 @@ class TokenProducer:
             pressure_mode: If True, after generating the first `request_num` tokens
                 (used to warm up connections), subsequent tokens are produced without sleep.
             work_dir: Working directory for saving RPS distribution plot.
+            enable_rate_server: Whether to enable the socket server for dynamic rate updates.
+            rate_server_host: Host address for the rate server.
+            rate_server_port: Port number for the rate server.
         """
         self.logger = AISLogger()
         self.request_rate = request_rate
@@ -406,6 +537,22 @@ class TokenProducer:
         self.perf_mode = self.pressure_mode or mode == "perf"
         self.burstiness = 1.0
         self.work_dir = work_dir
+
+        # If `traffic_cfg` is provided, pre-generate `interval_lists` for ramp-up; after
+        # exhausting it, fall back to gamma-distributed intervals based on request_rate.
+        self.interval_lists = []
+        # if traffic_cfg:
+        self.burstiness = float(traffic_cfg.get("burstiness", self.burstiness))
+        ramp_up_strategy = traffic_cfg.get("ramp_up_strategy")
+        ramp_up_start_rps = traffic_cfg.get("ramp_up_start_rps")
+        ramp_up_end_rps = traffic_cfg.get("ramp_up_end_rps")
+
+        # Store original parameters for dynamic updates
+        self.original_request_num = request_num
+        self.original_ramp_up_strategy = ramp_up_strategy
+        self.original_ramp_up_start_rps = ramp_up_start_rps
+        self.original_ramp_up_end_rps = ramp_up_end_rps
+
         # When request_rate < 0.1, treat as infinite (no pacing applied here)
         if self.request_rate < FINAL_RPS_MINIMUM_THRESHOLD:
             self.token_bucket = None
@@ -417,14 +564,6 @@ class TokenProducer:
             for _ in range(request_num + 1):
                 self.token_bucket.acquire()
 
-        # If `traffic_cfg` is provided, pre-generate `interval_lists` for ramp-up; after
-        # exhausting it, fall back to gamma-distributed intervals based on request_rate.
-        self.interval_lists = []
-        # if traffic_cfg:
-        self.burstiness = float(traffic_cfg.get("burstiness", self.burstiness))
-        ramp_up_strategy = traffic_cfg.get("ramp_up_strategy")
-        ramp_up_start_rps = traffic_cfg.get("ramp_up_start_rps")
-        ramp_up_end_rps = traffic_cfg.get("ramp_up_end_rps")
         if ramp_up_strategy:
             self.logger.info(
                 f"Traffic ramp-up strategy: {ramp_up_strategy}. Will increase "
@@ -442,6 +581,12 @@ class TokenProducer:
             ramp_up_start_rps,
             ramp_up_end_rps,
         )
+
+        # Initialize socket server for dynamic rate updates if enabled
+        self.rate_server = None
+        if enable_rate_server:
+            self.rate_server = RequestRateServer(self, rate_server_host, rate_server_port)
+            self.rate_server.start()
 
     def _generate_interval_lists(
         self,
@@ -605,6 +750,47 @@ class TokenProducer:
 
         return delay_ts
 
+    def update_request_rate(self, new_rate: float):
+        """Update the request rate and regenerate interval lists.
+
+        Args:
+            new_rate: New request rate (RPS)
+        """
+        self.logger.info(f"Updating request rate from {self.request_rate} to {new_rate}")
+        self.request_rate = new_rate
+
+        # Reinitialize token bucket if needed
+        if self.request_rate < FINAL_RPS_MINIMUM_THRESHOLD:
+            self.token_bucket = None
+            if self.pressure_mode:
+                self.logger.warning("Pressure mode with no request rate applied, concurrency will increase rapidly")
+        else:
+            # Note: We can't easily resize the token_bucket, so we'll keep the existing one
+            # and just adjust the timing in produce_token method
+            pass
+
+        # Regenerate interval lists with new rate
+        # Use the original parameters but with the new rate
+        self.interval_lists = self._generate_interval_lists(
+            self.original_request_num if self.original_request_num else 100,  # Estimate request count
+            self.burstiness,
+            self.original_ramp_up_strategy,
+            self.original_ramp_up_start_rps,
+            self.original_ramp_up_end_rps,
+        )
+
+        # Update theta for gamma distribution in produce_token
+        if hasattr(self, 'burstiness') and self.burstiness > 0:
+            self.theta = 1.0 / (self.request_rate * self.burstiness)
+
+        self.logger.info(f"Request rate updated to {new_rate} RPS")
+
+    def cleanup(self):
+        """Clean up resources, including stopping the rate server if running."""
+        if self.rate_server:
+            self.rate_server.stop()
+            self.rate_server = None
+
     def produce_token(self, stop_evt: Event, per_pid_shms: Dict[int, shared_memory.SharedMemory]):
         """Produce tokens for request pacing.
 
@@ -630,7 +816,7 @@ class TokenProducer:
         if not self.token_bucket:
             return
         interval_index = 0
-        theta = 1.0 / (self.request_rate * self.burstiness)
+        self.theta = 1.0 / (self.request_rate * self.burstiness)  # Initialize theta for dynamic updates
 
         start_time = time.perf_counter()
 
@@ -642,7 +828,7 @@ class TokenProducer:
                 except ValueError as e:
                     # ValueError: semaphore or lock released too many times
                     # Indicates token bucket is full, wait for tokens to be used
-                    wait_interval = np.random.gamma(shape=self.burstiness, scale=theta)
+                    wait_interval = np.random.gamma(shape=self.burstiness, scale=self.theta)
                     time.sleep(wait_interval)
                     continue
                 current_time = time.perf_counter()
@@ -659,7 +845,7 @@ class TokenProducer:
                 except Exception as e:
                     # ValueError: semaphore or lock released too many times
                     # Indicates token bucket is full, wait for tokens to be used
-                    interval = np.random.gamma(shape=self.burstiness, scale=theta)
+                    interval = np.random.gamma(shape=self.burstiness, scale=self.theta)
                     time.sleep(interval)
 
 
