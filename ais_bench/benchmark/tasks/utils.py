@@ -810,7 +810,7 @@ class TokenProducer:
 
         while not stop_evt.is_set():
             if interval_index < len(self.interval_lists):
-                interval = self.custom_interval if self.custom_interval else self.interval_lists[interval_index]
+                interval = self.interval_lists[interval_index]
                 try:
                     self.token_bucket.release()
                 except ValueError as e:
@@ -820,7 +820,10 @@ class TokenProducer:
                     time.sleep(wait_interval)
                     continue
                 current_time = time.perf_counter()
-                sleep_interval = interval - (current_time - start_time)
+                if self.custom_interval:
+                    sleep_interval = self.custom_interval
+                else:
+                    sleep_interval = interval - (current_time - start_time)
                 if sleep_interval > 0:
                     time.sleep(sleep_interval)
                 interval_index += 1
