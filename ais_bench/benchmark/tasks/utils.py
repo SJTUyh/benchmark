@@ -29,6 +29,7 @@ from ais_bench.benchmark.utils.config.message_constants import (
     FMT,
 )
 from ais_bench.benchmark.utils.visualization.rps_distribution_plot import plot_rps_distribution
+from ais_bench.benchmark.global_consts import PENDING_TOKEN_RATE
 
 MAX_VIRTUAL_MEMORY_USAGE_PERCENT = 80
 INDEX_READ_FLAG = -1
@@ -812,6 +813,9 @@ class TokenProducer:
         while not stop_evt.is_set():
             if interval_index < len(self.interval_lists):
                 interval = self.interval_lists[interval_index]
+                if self.custom_interval and self.token_bucket.get_value() > int(PENDING_TOKEN_RATE * self.request_rate):
+                    time.sleep(self.custom_interval)
+                    continue
                 try:
                     self.token_bucket.release()
                 except ValueError as e:
