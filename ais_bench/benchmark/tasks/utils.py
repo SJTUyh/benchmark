@@ -772,6 +772,7 @@ class TokenProducer:
         self.custom_interval = 1.0 / self.request_rate
 
         self.logger.info(f"Request rate updated to {new_rate} RPS")
+        self.logger.info(f"Released tokens is {self.token_bucket._get_value()}")
 
     def cleanup(self):
         """Clean up resources, including stopping the rate server if running."""
