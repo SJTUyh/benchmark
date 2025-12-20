@@ -427,6 +427,8 @@ class OpenICLApiInferTask(BaseTask):
             request_num,
             self.task_mode,
             os.path.join(self.inferencer.get_output_dir(self.work_dir), merge_dataset_abbr_from_cfg(self.cfg)),
+            self.model_cfg.pop("token_service_ip", "localhost"),
+            self.model_cfg.pop("token_service_port", 8888),
         )
         message_shms = {}
         # Message queue collecting per-process request state; polled periodically
