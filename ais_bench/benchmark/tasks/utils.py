@@ -505,7 +505,7 @@ class TokenProducer:
         request_num: int = None,
         mode: str = "infer",
         work_dir: str = os.getcwd(),
-        enable_rate_server: bool = False,
+        enable_rate_server: bool = True,
         rate_server_host: str = "localhost",
         rate_server_port: int = 8888,
     ):
@@ -585,6 +585,9 @@ class TokenProducer:
         # Initialize socket server for dynamic rate updates if enabled
         self.rate_server = None
         if enable_rate_server:
+            self.logger.info(
+                f"Rate server enabled. Host: {rate_server_host}, Port: {rate_server_port}"
+            )
             self.rate_server = RequestRateServer(self, rate_server_host, rate_server_port)
             self.rate_server.start()
 
