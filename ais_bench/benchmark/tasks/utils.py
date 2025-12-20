@@ -553,6 +553,8 @@ class TokenProducer:
         self.original_ramp_up_start_rps = ramp_up_start_rps
         self.original_ramp_up_end_rps = ramp_up_end_rps
 
+        self.custom_interval = None
+
         # When request_rate < 0.1, treat as infinite (no pacing applied here)
         if self.request_rate < FINAL_RPS_MINIMUM_THRESHOLD:
             self.token_bucket = None
