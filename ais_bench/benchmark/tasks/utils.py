@@ -764,27 +764,10 @@ class TokenProducer:
 
         # Reinitialize token bucket if needed
         if self.request_rate < FINAL_RPS_MINIMUM_THRESHOLD:
-            self.token_bucket = None
-            if self.pressure_mode:
-                self.logger.warning("Pressure mode with no request rate applied, concurrency will increase rapidly")
-        else:
-            # Note: We can't easily resize the token_bucket, so we'll keep the existing one
-            # and just adjust the timing in produce_token method
-            pass
+            self.request_rate = FINAL_RPS_MINIMUM_THRESHOLD
+            self.logger.warning(f"Request rate adjusted to {self.request_rate} RPS to avoid zero division")
 
-        # Regenerate interval lists with new rate
-        # Use the original parameters but with the new rate
-        self.interval_lists = self._generate_interval_lists(
-            self.original_request_num if self.original_request_num else 100,  # Estimate request count
-            self.burstiness,
-            self.original_ramp_up_strategy,
-            self.original_ramp_up_start_rps,
-            self.original_ramp_up_end_rps,
-        )
-
-        # Update theta for gamma distribution in produce_token
-        if hasattr(self, 'burstiness') and self.burstiness > 0:
-            self.theta = 1.0 / (self.request_rate * self.burstiness)
+        self.custom_interval = 1.0 / self.request_rate
 
         self.logger.info(f"Request rate updated to {new_rate} RPS")
 
@@ -825,7 +808,7 @@ class TokenProducer:
 
         while not stop_evt.is_set():
             if interval_index < len(self.interval_lists):
-                interval = self.interval_lists[interval_index]
+                interval = self.custom_interval if self.custom_interval else self.interval_lists[interval_index]
                 try:
                     self.token_bucket.release()
                 except ValueError as e:
