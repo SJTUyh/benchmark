@@ -110,7 +110,7 @@ def _validate_model_cfg(model_cfg: ConfigDict) -> dict:
                     if not validator(traffic_cfg[field]):
                         errors[f"traffic_cfg.{field}"] = error_msg
     return errors
-    
+
 
 def build_dataset_from_cfg(dataset_cfg: ConfigDict):
     logger.debug(f"Building dataset from config: type={dataset_cfg.get('type')} abbr={dataset_cfg.get('abbr')}")
@@ -141,6 +141,8 @@ def build_model_from_cfg(model_cfg: ConfigDict):
     model_cfg.pop("min_out_len", None)
     model_cfg.pop("returns_tool_calls", None)
     model_cfg.pop("traffic_cfg", None)
+    model_cfg.pop("token_service_ip", None)
+    model_cfg.pop("token_service_port", None)
     return MODELS.build(model_cfg)
 
 def build_perf_metric_calculator_from_cfg(metric_cfg: ConfigDict):
