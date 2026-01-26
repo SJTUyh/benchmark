@@ -542,34 +542,59 @@ class TestOpenICLApiInferTask(unittest.TestCase):
         task = self._create_task()
         task.logger = mock_logger
         task.concurrency = 600  # 大于CONCURRENCY_PER_PROCESS
+        # 设置inferencer，因为_run_multi_process需要使用task.inferencer.use_timestamp
+        task.inferencer = MagicMock()
+        task.inferencer.use_timestamp = False
 
-        # Mock shared memory
-        from multiprocessing import shared_memory, BoundedSemaphore
-        dataset_shm = shared_memory.SharedMemory(create=True, size=100)
-        message_shm = shared_memory.SharedMemory(create=True, size=100)
-        mock_create_shm.return_value = message_shm
+        # Mock _get_workers_num 返回有效值，确保 _deliver_concurrency_for_workers 不返回空列表
+        with patch.object(task, '_get_workers_num', return_value=3):
+            # Mock shared memory
+            from multiprocessing import shared_memory, BoundedSemaphore
+            dataset_shm = shared_memory.SharedMemory(create=True, size=100)
+            message_shm = shared_memory.SharedMemory(create=True, size=100)
+            mock_create_shm.return_value = message_shm
 
-        # Mock process
-        mock_process = MagicMock()
-        mock_process.pid = 12345
-        mock_process_class.return_value = mock_process
+            # Mock process - 使用一个计数器来为每个进程分配不同的pid
+            process_counter = [0]
+            def create_mock_process(*args, **kwargs):
+                mock_p = MagicMock()
+                current_idx = process_counter[0]
+                process_counter[0] += 1
+                # 确保pid在start()之后设置（模拟真实行为）
+                def mock_start():
+                    mock_p.pid = 12345 + current_idx
+                mock_p.start = mock_start
+                # 初始pid为None，start()后才会设置
+                mock_p.pid = None
+                return mock_p
+            mock_process_class.side_effect = create_mock_process
 
-        indexes = {0: (0, 0, 100)}
-        token_bucket = BoundedSemaphore(10)
-        message_shms = {}
+            indexes = {0: (0, 0, 100)}
+            token_bucket = BoundedSemaphore(10)
+            message_shms = {}
 
-        try:
-            processes = task._run_multi_process(dataset_shm, indexes, token_bucket, message_shms)
+            try:
+                processes = task._run_multi_process(dataset_shm, indexes, token_bucket, message_shms)
 
-            # 验证创建了process
-            self.assertGreater(len(processes), 0)
-            # 验证message_shms被更新
-            self.assertGreater(len(message_shms), 0)
-        finally:
-            dataset_shm.close()
-            dataset_shm.unlink()
-            message_shm.close()
-            message_shm.unlink()
+                # 验证创建了process
+                self.assertGreater(len(processes), 0)
+                # 验证message_shms被更新
+                self.assertGreater(len(message_shms), 0)
+            finally:
+                dataset_shm.close()
+                dataset_shm.unlink()
+                # 清理message_shms中的共享内存
+                for shm in message_shms.values():
+                    try:
+                        shm.close()
+                        shm.unlink()
+                    except:
+                        pass
+                try:
+                    message_shm.close()
+                    message_shm.unlink()
+                except:
+                    pass
 
     @patch('ais_bench.benchmark.tasks.openicl_api_infer.AISLogger')
     def test_init_with_repeat_gt_1(self, mock_logger_class):
@@ -1037,7 +1062,6 @@ class TestOpenICLApiInferTask(unittest.TestCase):
         finally:
             dataset_shm.close()
             dataset_shm.unlink()
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -297,6 +297,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=self.request_num,
             mode="pressure" if self.pressure_mode else "infer"
@@ -315,6 +316,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=0.05,
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=self.request_num,
             mode="pressure" if self.pressure_mode else "infer"
@@ -338,6 +340,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=traffic_cfg,
             request_num=self.request_num,
             mode="pressure" if self.pressure_mode else "infer"
@@ -364,6 +367,7 @@ class TestTokenProducer(unittest.TestCase):
         with self.assertRaises(ParameterValueError) as context:
             TokenProducer(
                 request_rate=self.request_rate,
+                time_stamps=[],
                 traffic_cfg=traffic_cfg,
                 request_num=self.request_num,
                 mode="infer"
@@ -386,6 +390,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=traffic_cfg,
             request_num=10,
             mode="pressure" if self.pressure_mode else "infer"
@@ -410,6 +415,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=traffic_cfg,
             request_num=10,
             mode="pressure" if self.pressure_mode else "infer"
@@ -425,6 +431,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=0.05,  # 低速率，token_bucket为None
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=self.request_num,
             mode="pressure" if self.pressure_mode else "infer"
@@ -444,6 +451,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=10,  # 小数量用于快速测试
             mode="pressure" if self.pressure_mode else "infer"
@@ -474,6 +482,7 @@ class TestTokenProducer(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=10,
             mode="pressure" if self.pressure_mode else "infer"
@@ -936,6 +945,7 @@ class TestTokenProducerAdditional(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=self.request_rate,
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=10,
             mode="pressure" if self.pressure_mode else "infer"
@@ -980,6 +990,7 @@ class TestTokenProducerAdditional(unittest.TestCase):
 
         producer = TokenProducer(
             request_rate=100,  # 高频率
+            time_stamps=[],
             traffic_cfg=self.traffic_cfg,
             request_num=10,
             mode="pressure" if self.pressure_mode else "infer"
@@ -1012,7 +1023,6 @@ class TestTokenProducerAdditional(unittest.TestCase):
                 shm.unlink()
             except:
                 pass
-
 
 if __name__ == '__main__':
     unittest.main()

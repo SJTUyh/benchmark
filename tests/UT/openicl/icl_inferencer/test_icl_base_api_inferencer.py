@@ -132,7 +132,13 @@ class TestBaseApiInferencer(unittest.TestCase):
         """测试_get_single_data方法从共享内存读取数据"""
         m_build.return_value = DummyModel()
         inf = ConcreteApiInferencer(model_cfg={})
-        inf.set_data_count(1)
+        # 使用set_config设置total_data_count
+        from ais_bench.benchmark.openicl.icl_inferencer.icl_base_api_inferencer import ApiInferencerConfig
+        import multiprocessing as mp
+        global_index = mp.RawValue('i', 0)
+        global_lock = mp.Lock()
+        config = ApiInferencerConfig(global_index=global_index, global_lock=global_lock, use_timestamp=False, total_data_count=1)
+        inf.set_config(config)
 
         test_data = {"test": "data"}
         pickled_data = pickle.dumps(test_data)
@@ -159,7 +165,12 @@ class TestBaseApiInferencer(unittest.TestCase):
         m_build.return_value = DummyModel()
         inf = ConcreteApiInferencer(model_cfg={})
         # 设置 total_data_count，否则在非 pressure 模式下会提前返回 None
-        inf.set_data_count(2)
+        from ais_bench.benchmark.openicl.icl_inferencer.icl_base_api_inferencer import ApiInferencerConfig
+        import multiprocessing as mp
+        global_index = mp.RawValue('i', 0)
+        global_lock = mp.Lock()
+        config = ApiInferencerConfig(global_index=global_index, global_lock=global_lock, use_timestamp=False, total_data_count=2)
+        inf.set_config(config)
 
         test_data1 = {"test": "data1"}
         test_data2 = {"test": "data2"}
