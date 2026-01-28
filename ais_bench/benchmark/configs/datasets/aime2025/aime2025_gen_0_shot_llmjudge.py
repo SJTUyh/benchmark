@@ -49,13 +49,13 @@ GRADER_TEMPLATE = """
 
     <Original Question Begin>: \n{question}\n<Original Question End>\n\n
     <Gold Target Begin>: \n{answer}\n<Gold Target End>\n\n
-    <Predicted Answer Begin>: \n{prediction}\n<Predicted End>\n\n
+    <Predicted Answer Begin>: \n{model_answer}\n<Predicted End>\n\n
 
     Judging the correctness of candidates' answers:
 """.strip()
 
 aime2025_judge_infer_cfg = dict(
-    judge_reader_cfg = dict(input_columns=["question", "model_answer"], output_column="standard_judge_answer"),
+    judge_reader_cfg = dict(input_columns=["question", "answer", "model_answer"], output_column="standard_judge_answer"),
     judge_model=dict(
         attr="service",
         type=VLLMCustomAPIChat,
