@@ -325,7 +325,7 @@ class PerfViz(BaseWorker):
 WORK_FLOW = dict(
     all=[Infer, JudgeInfer, Eval, AccViz],
     infer=[Infer],
-    eval=[Eval, JudgeInfer, AccViz],
+    eval=[JudgeInfer, Eval, AccViz],
     viz=[AccViz],
     perf=[Infer, PerfViz],
     perf_viz=[PerfViz],
