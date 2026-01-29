@@ -108,6 +108,96 @@ class Infer(BaseWorker):
                 task.attack = cfg.attack
 
 
+class JudgeInfer(BaseWorker):
+    def update_cfg(self, cfg: ConfigDict) -> None:
+        def get_task_type() -> str:
+            if cfg["models"][0]["attr"] == "service":
+                return get_config_type(OpenICLApiInferTask)
+            else:
+                return get_config_type(OpenICLInferTask)
+
+        new_cfg = dict(
+            judge_infer=dict(
+                partitioner=dict(type=get_config_type(NaivePartitioner)),
+                runner=dict(
+                    max_num_workers=self.args.max_num_workers,
+                    max_workers_per_gpu=self.args.max_workers_per_gpu,
+                    debug=self.args.debug,
+                    task=dict(type=get_task_type()),
+                    type=get_config_type(LocalRunner),
+                ),
+            ),
+        )
+
+        cfg.merge_from_dict(new_cfg)
+        if cfg.cli_args.debug:
+            cfg.judge_infer.runner.debug = True
+        cfg.judge_infer.partitioner["out_dir"] = osp.join(cfg["work_dir"], "predictions/")
+        return cfg
+
+    def do_work(self, cfg: ConfigDict):
+        partitioner = PARTITIONERS.build(cfg.judge_infer.partitioner)
+        logger.info("Starting inference tasks...")
+        tasks = partitioner(cfg)
+
+        # delete the tasks without judge_infer_cfg
+        new_tasks = []
+        for task in tasks:
+            if task["datasets"][0][0].get("judge_infer_cfg"):
+                new_tasks.append(task)
+        tasks = new_tasks
+
+        # update tasks cfg before run
+        self._update_tasks_cfg(tasks, cfg)
+
+        if (
+            cfg.get("cli_args", {}).get("merge_ds", False)
+            or cfg.get("cli_args", {}).get("mode") == "perf" # performance mode will enable merge datasets by default
+        ):
+            logger.info("Merging datasets with the same model and inferencer...")
+            tasks = self._merge_datasets(tasks)
+
+        runner = RUNNERS.build(cfg.infer.runner)
+        runner(tasks)
+        logger.info("Inference tasks completed.")
+
+    def _merge_datasets(self, tasks):
+        # merge datasets with the same model, dataset type and inferencer
+        task_groups = defaultdict(list)
+        for task in tasks:
+            key = (
+                task["models"][0]["abbr"] # same model
+                + "_"
+                + str(task['datasets'][0][0]['type']) # same dataset type
+                + "_"
+                + str(task["datasets"][0][0]["infer_cfg"]["inferencer"]) # same inferencer with the same args
+            )
+            task_groups[key].append(task)
+        new_tasks = []
+        for key, task_group in task_groups.items():
+            new_task = copy.deepcopy(task_group[0])
+            if len(task_group) > 1:
+                for t in task_group[1:]:
+                    new_task["datasets"][0].extend(t["datasets"][0])
+            new_tasks.append(new_task)
+        return new_tasks
+
+    def _update_tasks_cfg(self, tasks, cfg: ConfigDict):
+        # update parameters to correct sub cfg
+        if hasattr(cfg, "attack"):
+            for task in tasks:
+                cfg.attack.dataset = task.datasets[0][0].abbr
+                task.attack = cfg.attack
+
+        # update judge cfgs to model cfgs and data
+        for task in tasks:
+            task["datasets"][0][0]["predictions_path"] = osp.join(cfg.judge_infer.partitioner.out_dir, task["models"][0]["abbr"])
+            task["models"][0] = task["datasets"][0][0]["judge_infer_cfg"].pop("judge_model")
+            task["datasets"][0][0]["type"] = task["datasets"][0][0]["judge_infer_cfg"].pop("judge_dataset_type")
+            task["datasets"][0][0]["reader_cfg"] = task["datasets"][0][0]["judge_infer_cfg"].pop("judge_reader_cfg")
+            task["datasets"][0][0]["infer_cfg"] = task["datasets"][0][0].pop("judge_infer_cfg")
+
+
 class Eval(BaseWorker):
     def update_cfg(self, cfg: ConfigDict) -> None:
         new_cfg = dict(
@@ -233,9 +323,9 @@ class PerfViz(BaseWorker):
 
 
 WORK_FLOW = dict(
-    all=[Infer, Eval, AccViz],
+    all=[Infer, JudgeInfer, Eval, AccViz],
     infer=[Infer],
-    eval=[Eval, AccViz],
+    eval=[Eval, JudgeInfer, AccViz],
     viz=[AccViz],
     perf=[Infer, PerfViz],
     perf_viz=[PerfViz],

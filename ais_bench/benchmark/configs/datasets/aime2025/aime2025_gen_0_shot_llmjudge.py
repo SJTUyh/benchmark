@@ -5,6 +5,7 @@ from ais_bench.benchmark.models import VLLMCustomAPIChat
 from ais_bench.benchmark.utils.postprocess.model_postprocessors import extract_non_reasoning_content
 from ais_bench.benchmark.datasets import (
     Aime2025Dataset,
+    Aime2025JDGDataset,
     MATHEvaluator,
     math_postprocess_v2,
 )
@@ -59,7 +60,7 @@ aime2025_judge_infer_cfg = dict(
     judge_model=dict(
         attr="service",
         type=VLLMCustomAPIChat,
-        abbr="vllm-api-stream-chat",
+        abbr="vllm-api-stream-chat-judge",
         path="",
         model="",
         stream=True,
@@ -79,6 +80,7 @@ aime2025_judge_infer_cfg = dict(
         ),
         pred_postprocessor=dict(type=extract_non_reasoning_content),
     ),
+    judge_dataset_type=Aime2025JDGDataset,
     prompt_template=dict(
         type=PromptTemplate,
         template=dict(

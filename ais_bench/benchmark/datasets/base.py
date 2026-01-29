@@ -1,3 +1,4 @@
+import os
 from abc import abstractmethod
 from typing import List, Dict, Optional, Union
 
@@ -108,3 +109,17 @@ class BaseDataset:
     @abstractmethod
     def load(**kwargs) -> Union[Dataset, DatasetDict]:
         pass
+
+class BaseJDGDatasetMethod:
+    @staticmethod
+    def load_from_predictions(prediction_dir: str, dataset_abbr: str) -> Dict:
+        """Load predictions from a directory and merge them with the dataset.
+
+        Args:
+            prediction_dir (str): The directory containing prediction files.
+
+        Returns:
+            Dataset: The merged dataset with predictions.
+        """
+        prediction_path = os.path.join(prediction_dir, f"{dataset_abbr}.jsonl")
+        return {}
