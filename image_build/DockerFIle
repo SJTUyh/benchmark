@@ -1,0 +1,55 @@
+FROM docker.xuanyuan.me/python:3.10.18-bullseye
+
+ARG GIT_TAG=latest
+
+RUN sed -i "s@http://deb.debian.org@http://mirrors.aliyun.com@g" /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends vim curl git && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# 从 Gitee 克隆代码（替换为你的仓库地址）
+#RUN git clone https://github.com/AISBench/benchmark.git  /benchmark
+
+RUN git clone https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git  /benchmark
+
+# 设置工作目录
+WORKDIR /benchmark
+
+RUN if [ "$GIT_TAG" != "latest" ]; then \
+        git fetch --tags && \
+        git checkout tags/$GIT_TAG -b $GIT_TAG-branch; \
+    fi
+
+# 设置工作目录（已在上一步切换，此处保留确保一致性）
+WORKDIR /benchmark
+
+# 安装 Python 依赖（如果项目有 requirements.txt
+RUN pip install rouge_chinese -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517
+RUN if [ -f "requirements/runtime.txt" ]; then pip install -r requirements/runtime.txt -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
+RUN if [ -f "requirements/extra.txt" ]; then pip install -r requirements/extra.txt -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
+RUN if [ -f "requirements/api.txt" ]; then pip install -r requirements/api.txt -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
+RUN if [ -f "requirements/bfcl_dependencies.txt" ]; then pip3 install -r requirements/datasets/bfcl_dependencies.txt --no-deps -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
+
+
+# 1. 安装NLTK 3.8（锁定版本，避免升级）
+RUN pip3 install --no-cache-dir nltk==3.8 -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com
+
+# 复制punkt.zip（旧名称包）
+COPY punkt.zip /tmp/
+
+# 解压到NLTK默认路径（直接适配punkt名称）
+RUN mkdir -p /usr/share/nltk_data/tokenizers && \
+    unzip -q /tmp/punkt.zip -d /usr/share/nltk_data/tokenizers && \
+    rm /tmp/punkt.zip
+
+# 4. 配置环境变量，让NLTK 3.8找到离线包
+ENV NLTK_DATA=/usr/share/nltk_data
+
+# 5. 验证（NLTK 3.8测试分词功能）
+RUN python3 -c "import nltk;from nltk.tokenize import word_tokenize;tokens = word_tokenize('Hello World! 测试NLTK 3.8离线安装');print('分词结果：', tokens)"
+
+
+# 安装你的工具（假设通过 setup.py 安装）
+RUN if [ -f "setup.py" ]; then pip install -e ./ -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
+
+RUN pip install rouge_chinese -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517
