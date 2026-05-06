@@ -223,7 +223,8 @@ class TestTAU2BenchTask(unittest.TestCase):
         # 验证结果文件内容
         with open(expected_out_json, 'r') as f:
             results = json.load(f)
-        self.assertEqual(results.get("pass^2"), 80.0)  # 0.8 * 100
+        self.assertEqual(results.get("pass^1"), 80.0)  # 0.8 * 100
+        self.assertEqual(results.get("pass^2"), 64.0)  # 0.64 * 100
         self.assertEqual(results.get("total_count"), 3)  # 因为 get_tasks 被 mock 为返回 3 个任务
 
     @mock.patch('ais_bench.benchmark.tasks.custom_tasks.tau2_bench_task.get_tasks')
