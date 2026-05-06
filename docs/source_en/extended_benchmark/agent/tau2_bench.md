@@ -213,7 +213,7 @@ for task in sub_tasks:
             abbr=f'tau2_bench_{task}',
             args = dict(
                 domain = task,                      # -d, simulation domain to run, optional values: "airline", "retail", "telecom"
-                num_trials = 3,                     # Number of runs per task, default is 1
+                num_trials = 5,                     # Number of runs per task, default is 1
                 # ......
             ),
         )
