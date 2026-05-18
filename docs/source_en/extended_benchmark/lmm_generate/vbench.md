@@ -287,20 +287,14 @@ The core change in VBench-1.0-mini is replacing the original **`VBench_full_info
 
 ### Replace VBench_full_info.json
 
-VBench-1.0-mini provides a condensed `VBench_full_info.json` corresponding to the sampled prompts. AISBench reads `ais_bench/third_party/vbench/VBench_full_info.json` by default, so you need to overwrite it with the mini version:
+VBench-1.0-mini provides a condensed `VBench_full_info.json` corresponding to the sampled prompts. Specify the mini JSON path in the configuration file (e.g., `eval_vbench_standard.py`) using the `full_json_dir` field under `eval_cfg` or `dataset`:
 
-```bash
-cp <MINI_ROOT>/VBench_full_info.json ais_bench/third_party/vbench/VBench_full_info.json
+```python
+vbench_eval_cfg = dict(
+    load_ckpt_from_local=True,
+    full_json_dir="<MINI_ROOT>/VBench_full_info.json",
+)
 ```
-
-> **Alternative approach**: If you prefer not to overwrite the default file, you can specify the mini JSON path directly in the configuration file (e.g., `eval_vbench_standard.py`) using the `full_json_dir` field under `eval_cfg` or `dataset`:
->
-> ```python
-> vbench_eval_cfg = dict(
->     load_ckpt_from_local=True,
->     full_json_dir="<MINI_ROOT>/VBench_full_info.json",
-> )
-> ```
 
 ### Inference Result (Video) Generation
 
