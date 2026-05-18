@@ -256,3 +256,72 @@ for task in sub_tasks:
 | tau2_bench_pass^5_avg | - | naive_average | gen | / | 21.59 |
 | tau2_bench_pass^5_avg-weighted | - | weighted_average | gen | / | 19.64 |
 ```
+
+## Using the TAU2-mini Sampled Subset
+
+**TAU2-mini** is a TAU2 sampled subset provided by AISBench, using K-means clustering to sample at approximately 1/10 scale of the original dataset. It yields roughly the same evaluation scores as the original dataset, making it ideal for quick model validation and reducing evaluation costs. Dataset URL: [TAU2-mini](https://modelers.cn/datasets/AISBench/TAU2-mini).
+
+### 1. Download the TAU2-mini Dataset
+
+Download the dataset from [Modelers](https://modelers.cn/datasets/AISBench/TAU2-mini). After downloading and extracting, note the dataset root directory path (referred to below as `<TAU2_MINI_ROOT>`).
+
+### 2. Replace tau2's Original Dataset Files
+
+Find the tau2 installation path with the following command:
+
+```bash
+pip3 show tau2 | grep "Editable project location"
+```
+
+This produces output similar to:
+
+```
+Editable project location: {tau2_root}/benchmark/src/tau2
+```
+
+Replace tau2's original dataset files with the TAU2-mini files (**back up** `{tau2_root}/src/benchmark/tau2/data/tau2/domains` first):
+
+```bash
+cp -r <TAU2_MINI_ROOT>/tau2_subsets/* {tau2_root}/src/benchmark/tau2/data/tau2/domains
+```
+
+### 3. Modify the AISBench tau2-bench Configuration File
+
+Based on the [Quick Start](#quick-start-with-τ²-bench-evaluation-in-aisbench) configuration above, additionally modify the `task_split_name` parameter in `ais_bench/configs/agent_example/tau2_bench_task.py`:
+
+```python
+# ......
+for task in sub_tasks:
+    datasets.append(
+        dict(
+            abbr=f'tau2_bench_{task}',
+            args = dict(
+                # ......
+                task_split_name = "mini",           # Use the mini split
+                # ......
+            ),
+        )
+    )
+
+# ......
+```
+
+### 4. Run Evaluation
+
+Same as the standard workflow:
+
+```bash
+ais_bench ais_bench/configs/agent_example/tau2_bench_task.py --max-num-workers 3
+```
+
+After execution, the task counts per domain become airline **5**, retail **11**, and telecom **11**. Example accuracy results:
+
+```
+| dataset | version | metric | mode | total_count | openai-v1-chat |
+|----- | ----- | ----- | ----- | ----- | -----|
+| tau2_bench_airline | a39421 | pass^1 | gen | 5 | 40.00 |
+| tau2_bench_retail | a39421 | pass^1 | gen | 11 | 27.27 |
+| tau2_bench_telecom | a39421 | pass^1 | gen | 11 | 54.55 |
+| tau2_bench_pass^1_avg | - | naive_average | gen | / | 40.61 |
+| tau2_bench_pass^1_avg-weighted | - | weighted_average | gen | / | 40.74 |
+```

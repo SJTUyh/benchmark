@@ -256,3 +256,72 @@ for task in sub_tasks:
 | tau2_bench_pass^5_avg | - | naive_average | gen | / | 21.59 |
 | tau2_bench_pass^5_avg-weighted | - | weighted_average | gen | / | 19.64 |
 ```
+
+## 使用 TAU2-mini 采样子集
+
+**TAU2-mini** 是由 AISBench 提供的 TAU2 采样子集，通过 K-means 聚类算法对原始数据集进行约 1/10 规模的采样，在测试得分上与原始数据集大致相同，用于快速验证模型能力与降低评测成本。数据集地址：[TAU2-mini](https://modelers.cn/datasets/AISBench/TAU2-mini)。
+
+### 1. 下载 TAU2-mini 数据集
+
+从 [魔乐社区](https://modelers.cn/datasets/AISBench/TAU2-mini) 下载数据集。下载后解压，记下数据集根目录路径（下文称 `<TAU2_MINI_ROOT>`）。
+
+### 2. 替换 tau2 的原始数据集文件
+
+在安装环境上执行如下命令找到 tau2 的安装路径：
+
+```bash
+pip3 show tau2 | grep "Editable project location"
+```
+
+执行得到类似如下输出：
+
+```
+Editable project location: {tau2安装路径}/benchmark/src/tau2
+```
+
+将 TAU2-mini 数据中的文件替换 tau2 中的原始数据集文件（**请提前备份好** `{tau2安装路径}/src/benchmark/tau2/data/tau2/domains`）：
+
+```bash
+cp -r <TAU2_MINI_ROOT>/tau2_subsets/* {tau2安装路径}/src/benchmark/tau2/data/tau2/domains
+```
+
+### 3. 修改 AISBench 中 tau2-bench 的配置文件
+
+在上述[快速上手](#aisbench中快速上手-τ²-bench-测评)配置的基础上，额外修改 `ais_bench/configs/agent_example/tau2_bench_task.py` 中的 `task_split_name` 参数：
+
+```python
+# ......
+for task in sub_tasks:
+    datasets.append(
+        dict(
+            abbr=f'tau2_bench_{task}',
+            args = dict(
+                # ......
+                task_split_name = "mini",           # 使用 mini 分割
+                # ......
+            ),
+        )
+    )
+
+# ......
+```
+
+### 4. 执行测评
+
+与标准流程一致，执行如下命令：
+
+```bash
+ais_bench ais_bench/configs/agent_example/tau2_bench_task.py --max-num-workers 3
+```
+
+执行完成后，各领域的任务数变为 airline **5** 条、retail **11** 条、telecom **11** 条，精度结果示例：
+
+```
+| dataset | version | metric | mode | total_count | openai-v1-chat |
+|----- | ----- | ----- | ----- | ----- | -----|
+| tau2_bench_airline | a39421 | pass^1 | gen | 5 | 40.00 |
+| tau2_bench_retail | a39421 | pass^1 | gen | 11 | 27.27 |
+| tau2_bench_telecom | a39421 | pass^1 | gen | 11 | 54.55 |
+| tau2_bench_pass^1_avg | - | naive_average | gen | / | 40.61 |
+| tau2_bench_pass^1_avg-weighted | - | weighted_average | gen | / | 40.74 |
+```
