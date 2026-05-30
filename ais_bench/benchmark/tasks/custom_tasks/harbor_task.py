@@ -4,7 +4,6 @@ import json
 import os
 import os.path as osp
 import re
-import shutil
 import signal
 import sys
 import threading
@@ -24,28 +23,6 @@ from ais_bench.benchmark.utils.logging.exceptions import AISBenchConfigError
 from ais_bench.benchmark.utils.logging.error_codes import UTILS_CODES
 
 DEFAULT_FAKE_API_KEY = "fake_api_key"
-
-
-def parse_kwargs(kwargs_list: list[str] | None) -> dict[str, Any]:
-    if not kwargs_list:
-        return {}
-    result = {}
-    for kwarg in kwargs_list:
-        if "=" in kwarg:
-            key, value = kwarg.split("=", 1)
-            result[key] = value
-    return result
-
-
-def parse_env_vars(env_list: list[str] | None) -> dict[str, str]:
-    if not env_list:
-        return {}
-    result = {}
-    for env_var in env_list:
-        if "=" in env_var:
-            key, value = env_var.split("=", 1)
-            result[key] = value
-    return result
 
 
 @TASKS.register_module()
@@ -79,19 +56,20 @@ class HarborTask(BaseTask):
         self._dump_eval_results(job, job_result)
 
     def _set_api_key(self):
-        api_key = self.cfg["models"][0].get("api_key")
+        api_key = self.model_cfg.get("api_key")
         if api_key is None:
             api_key = DEFAULT_FAKE_API_KEY
         os.environ["OPENAI_API_KEY"] = api_key
 
     def _prepare_out_dir(self):
+        dataset_cfg = self.dataset_cfgs[0]
         self.out_dir = osp.join(
-            self.work_dir, self.output_subdir, self.cfg["models"][0]["abbr"]
+            self.work_dir, self.output_subdir, self.model_cfg["abbr"]
         )
-        mkdir_or_exist(osp.join(self.out_dir, self.cfg["datasets"][0][0]["abbr"]))
+        mkdir_or_exist(osp.join(self.out_dir, dataset_cfg["abbr"]))
         self.out_detail_dir = osp.join(
             self.out_dir,
-            self.cfg["datasets"][0][0]["abbr"],
+            dataset_cfg["abbr"],
         )
         mkdir_or_exist(Path(self.out_detail_dir))
 
@@ -106,7 +84,8 @@ class HarborTask(BaseTask):
         from harbor.models.agent.name import AgentName
         from harbor.models.environment_type import EnvironmentType
 
-        args = self.cfg["datasets"][0][0]["args"]
+        dataset_cfg = self.dataset_cfgs[0]
+        args = dataset_cfg.get("args") or {}
 
         config = JobConfig()
 
@@ -139,12 +118,11 @@ class HarborTask(BaseTask):
         if args.get("retry_exclude_exceptions"):
             config.retry.exclude_exceptions = set(args["retry_exclude_exceptions"])
 
-        agent_config = self.cfg["models"][0]
-        agent_kwargs = agent_config.get("agent_kwargs") or {}
-        agent_env = agent_config.get("agent_env") or {}
+        agent_kwargs = self.model_cfg.get("agent_kwargs") or {}
+        agent_env = self.model_cfg.get("agent_env") or {}
 
-        agent_name = AgentName(agent_config.get("agent_name", "oracle"))
-        model_names = agent_config.get("model_names")
+        agent_name = AgentName(self.model_cfg.get("agent_name", "oracle"))
+        model_names = self.model_cfg.get("model_names")
         if model_names:
             config.agents = [
                 AgentConfig(
@@ -174,22 +152,24 @@ class HarborTask(BaseTask):
         if args.get("disable_verification"):
             config.verifier.disable = True
         if args.get("verifier_env"):
-            config.verifier.env.update(parse_env_vars(args["verifier_env"]))
+            env_list = args["verifier_env"]
+            if isinstance(env_list, list):
+                config.verifier.env.update({k: v for k, v in (e.split("=", 1) for e in env_list if "=" in e)})
 
-        reuse_timestamp = None
-        if self.work_dir:
-            details_dir = Path(self.work_dir) / "details"
-            config_path = details_dir / "config.json"
-            if config_path.exists():
-                return self._resume_job(details_dir)
+        details_dir = Path(self.work_dir) / "details"
+        config_path = details_dir / "config.json"
+        if config_path.exists():
+            return self._resume_job(details_dir)
 
         if args.get("path"):
-            config.datasets = [DatasetConfig(
-                path=Path(args["path"]),
-                task_names=args.get("task_names"),
-                exclude_task_names=args.get("exclude_task_names"),
-                n_tasks=args.get("n_tasks"),
-            )]
+            config.datasets = [
+                DatasetConfig(
+                    path=Path(args["path"]),
+                    task_names=args.get("task_names"),
+                    exclude_task_names=args.get("exclude_task_names"),
+                    n_tasks=args.get("n_tasks"),
+                )
+            ]
         elif args.get("dataset_name_version"):
             name = args["dataset_name_version"]
             version = None
@@ -228,8 +208,8 @@ class HarborTask(BaseTask):
         return run_async(_count())
 
     def _resume_job(self, job_path):
-        from harbor.job import Job
         from harbor.cli.utils import run_async
+        from harbor.job import Job
 
         async def _resume():
             job_dir = Path(job_path)
@@ -244,67 +224,68 @@ class HarborTask(BaseTask):
         return run_async(_resume())
 
     def _run_with_tqdm(self, config, total_tasks):
-        from harbor.job import Job
         from harbor.cli.utils import run_async
+        from harbor.job import Job
 
         pbar = tqdm(total=total_tasks, desc="Running Harbor Job", unit="task")
         completed = 0
+        stop_event = threading.Event()
 
         if self.task_state_manager:
-            self.task_state_manager.update_task_state({
-                "status": "running",
-                "total_count": total_tasks,
-                "progress_description": "Running Harbor Job",
-                "finish_count": 0,
-            })
+            self.task_state_manager.update_task_state(
+                {
+                    "status": "running",
+                    "total_count": total_tasks,
+                    "progress_description": "Running Harbor Job",
+                    "finish_count": 0,
+                }
+            )
 
         def monitor_progress():
             nonlocal completed
-            while True:
+            while not stop_event.is_set():
                 if self.job and self.job.job_dir:
                     trial_count = len(list(self.job.job_dir.glob("trial_*")))
                     if trial_count > completed:
                         pbar.update(trial_count - completed)
                         completed = trial_count
                         if self.task_state_manager:
-                            self.task_state_manager.update_task_state({
-                                "finish_count": completed,
-                            })
-                time.sleep(0.5)
-                if completed >= total_tasks:
-                    pbar.update(total_tasks - pbar.n)
-                    pbar.close()
-                    break
+                            self.task_state_manager.update_task_state(
+                                {"finish_count": completed}
+                            )
+                stop_event.wait(0.5)
+            pbar.close()
 
         monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
         monitor_thread.start()
 
         def _handle_sigterm(signum, frame):
+            stop_event.set()
             raise KeyboardInterrupt
 
         signal.signal(signal.SIGTERM, _handle_sigterm)
 
         try:
+
             async def _run_job():
                 job = await Job.create(config)
                 return job, await job.run()
 
             self.job, self.job_result = run_async(_run_job())
-            self.logger.info("Harbor job completed, waiting for monitor thread...")
-            monitor_thread.join(timeout=5)
-            self.logger.info("Monitor thread joined")
         finally:
+            stop_event.set()
+            monitor_thread.join(timeout=5)
             pbar.close()
             if self.task_state_manager:
-                self.task_state_manager.update_task_state({
-                    "finish_count": total_tasks,
-                })
+                self.task_state_manager.update_task_state(
+                    {"finish_count": total_tasks}
+                )
 
         return self.job, self.job_result
 
     def _dump_eval_results(self, job, job_result):
-        args = self.cfg["datasets"][0][0]["args"]
-        task_abbr = self.cfg["datasets"][0][0]["abbr"]
+        dataset_cfg = self.dataset_cfgs[0]
+        task_abbr = dataset_cfg["abbr"]
 
         if job_result is None:
             self.logger.error(UTILS_CODES.UNKNOWN_ERROR, "No job result captured.")
@@ -343,8 +324,18 @@ class HarborTask(BaseTask):
             "total_count": total_count,
             "n_errors": n_errors,
             "avg_score": round(avg_reward, 4),
-            "reward_distribution": [{"score": float(k), "count": v} for k, v in sorted(reward_distribution.items(), key=lambda x: float(x[0]), reverse=True)],
-            "exception_distribution": [{"exception_type": k, "count": v} for k, v in sorted(exception_distribution.items(), key=lambda x: x[1], reverse=True)],
+            "reward_distribution": [
+                {"score": float(k), "count": v}
+                for k, v in sorted(
+                    reward_distribution.items(), key=lambda x: float(x[0]), reverse=True
+                )
+            ],
+            "exception_distribution": [
+                {"exception_type": k, "count": v}
+                for k, v in sorted(
+                    exception_distribution.items(), key=lambda x: x[1], reverse=True
+                )
+            ],
             "n_total_trials": job_result.n_total_trials,
             "pass_at_k": pass_at_k,
         }
@@ -363,7 +354,7 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    logger = AISLogger()
+    logger = AISLogger(__name__)
     args = parse_args()
     cfg = Config.fromfile(args.config)
 
@@ -379,7 +370,9 @@ if __name__ == "__main__":
     task_state_manager.update_task_state(
         {
             "status": "start",
-            "task_log_path": os.path.join(HarborTask.log_subdir, f"{task_abbr_from_cfg(cfg)}.out"),
+            "task_log_path": os.path.join(
+                HarborTask.log_subdir, f"{task_abbr_from_cfg(cfg)}.out"
+            ),
         }
     )
 
