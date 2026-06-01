@@ -1225,7 +1225,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
             "model1": {
                 "dataset1": {
                     "total_count": 100,
-                    "avg_score": 0.85
+                    "avg_score": 0.85,
+                    "reward_distribution": [{"score": 1.0, "count": 50}]
                 }
             }
         }
@@ -1233,6 +1234,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         summarizer = HarborSummarizer.__new__(HarborSummarizer)
         summarizer.model_abbrs = ["model1"]
         summarizer._print_harbor_details(raw_results)
+        self.assertTrue(mock_print.called)
+        self.assertIn('Total Count:', str(mock_print.call_args_list))
 
     @mock.patch('builtins.print')
     def test_print_harbor_details_shows_n_errors(self, mock_print):
@@ -1241,7 +1244,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
             "model1": {
                 "dataset1": {
                     "n_errors": 5,
-                    "avg_score": 0.85
+                    "avg_score": 0.85,
+                    "reward_distribution": [{"score": 1.0, "count": 50}]
                 }
             }
         }
@@ -1249,6 +1253,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         summarizer = HarborSummarizer.__new__(HarborSummarizer)
         summarizer.model_abbrs = ["model1"]
         summarizer._print_harbor_details(raw_results)
+        self.assertTrue(mock_print.called)
+        self.assertIn('Errors:', str(mock_print.call_args_list))
 
     @mock.patch('builtins.print')
     def test_print_harbor_details_shows_avg_score(self, mock_print):
@@ -1256,7 +1262,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         raw_results = {
             "model1": {
                 "dataset1": {
-                    "avg_score": 0.75
+                    "avg_score": 0.75,
+                    "reward_distribution": [{"score": 1.0, "count": 50}]
                 }
             }
         }
@@ -1264,6 +1271,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         summarizer = HarborSummarizer.__new__(HarborSummarizer)
         summarizer.model_abbrs = ["model1"]
         summarizer._print_harbor_details(raw_results)
+        self.assertTrue(mock_print.called)
+        self.assertIn('Avg Score:', str(mock_print.call_args_list))
 
     @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
     @mock.patch('ais_bench.benchmark.summarizers.harbor.model_abbr_from_cfg')
@@ -1278,7 +1287,7 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         mock_logger = mock.MagicMock()
         mock_ais_logger.return_value = mock_logger
         mock_model_abbr.side_effect = iter(["test_model"])
-        mock_dataset_abbr.return_value = "test_dataset"
+        mock_dataset_abbr.side_effect = iter(["test_dataset"])
 
         results_dir = os.path.join(self.temp_dir, "results", "test_model")
         os.makedirs(results_dir, exist_ok=True)
@@ -1318,8 +1327,8 @@ class TestHarborSummarizerEdgeCases(unittest.TestCase):
         """Test summarize with summary_group in parsed_results (row 147-152)"""
         mock_logger = mock.MagicMock()
         mock_ais_logger.return_value = mock_logger
-        mock_model_abbr.side_effect = iter(["model1", "model2"])
-        mock_dataset_abbr.side_effect = iter(["dataset1", "dataset2"])
+        mock_model_abbr.side_effect = iter(["model1", "model2", "model1", "model2"])
+        mock_dataset_abbr.side_effect = iter(["dataset1", "dataset2", "dataset1", "dataset2"])
 
         for model in ["model1", "model2"]:
             for dataset in ["dataset1", "dataset2"]:
