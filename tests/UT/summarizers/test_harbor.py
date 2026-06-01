@@ -497,8 +497,8 @@ class TestHarborSummarizerPickUpResults(unittest.TestCase):
         mock_logger = mock.MagicMock()
         mock_ais_logger.return_value = mock_logger
 
-        mock_model_abbr.side_effect = ["model1", "model2"]
-        mock_dataset_abbr.side_effect = ["dataset1", "dataset2"]
+        mock_model_abbr.side_effect = iter(["model1", "model2"])
+        mock_dataset_abbr.side_effect = iter(["dataset1", "dataset2", "dataset1", "dataset2"])
 
         for model in ["model1", "model2"]:
             results_dir = os.path.join(self.temp_dir, "results", model)
