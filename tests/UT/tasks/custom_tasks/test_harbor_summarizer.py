@@ -134,7 +134,7 @@ class TestHarborSummarizer(unittest.TestCase):
         mock_ais_logger.return_value = mock_logger
 
         mock_model_abbr.side_effect = ["test_model", "custom_abbr"]
-        mock_dataset_abbr.side_effect = ["test_dataset", "test_dataset2"]
+        mock_dataset_abbr.side_effect = iter(["test_dataset", "test_dataset2", "test_dataset", "test_dataset2"])
 
         mock_exists.return_value = False
 
@@ -293,7 +293,8 @@ class TestHarborSummarizer(unittest.TestCase):
              mock.patch('mmengine.mkdir_or_exist'), \
              mock.patch('builtins.print'), \
              mock.patch('builtins.open', mock.mock_open()):
-            result = summarizer.summarize(time_str="20230101_120000")
+            with mock.patch('mmengine.utils.strftime', return_value="20230101_120000"):
+                result = summarizer.summarize()
 
     @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
     @mock.patch('ais_bench.benchmark.summarizers.harbor.model_abbr_from_cfg')
@@ -448,11 +449,7 @@ class TestHarborSummarizer(unittest.TestCase):
              mock.patch('builtins.print') as mock_print, \
              mock.patch('builtins.open', mock.mock_open()) as mock_file:
 
-            with mock.patch('mmengine.utils.TimeStub') as mock_time:
-                mock_time_instance = mock.MagicMock()
-                mock_time_instance.now.return_value.time_str = "20230101_120000"
-                mock_time.now.return_value = mock_time_instance
-
+            with mock.patch('mmengine.utils.strftime', return_value="20230101_120000"):
                 summarizer.summarize()
 
     @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
@@ -521,6 +518,18 @@ class TestHarborSummarizer(unittest.TestCase):
 
         self.assertNotIn("test_dataset", dataset_metrics)
         self.assertNotIn("test_dataset", parsed_results.get("test_model", {}))
+
+    @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
+    @mock.patch('ais_bench.benchmark.summarizers.harbor.model_abbr_from_cfg')
+    def test_inheritance_from_default_summarizer(self, mock_model_abbr, mock_ais_logger):
+        """Test HarborSummarizer inherits from DefaultSummarizer"""
+        mock_logger = mock.MagicMock()
+        mock_ais_logger.return_value = mock_logger
+        mock_model_abbr.return_value = "test_model"
+
+        from ais_bench.benchmark.summarizers.default import DefaultSummarizer
+        summarizer = HarborSummarizer(self.config)
+        self.assertIsInstance(summarizer, DefaultSummarizer)
 
 
 if __name__ == '__main__':
