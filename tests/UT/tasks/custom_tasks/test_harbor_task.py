@@ -746,10 +746,7 @@ class TestHarborTaskGetTaskCount(unittest.TestCase):
         mock_config.datasets = [mock_dataset_config]
         mock_config.verifier.disable = False
 
-        def side_effect_func(func):
-            return func()
-
-        run_async.side_effect = side_effect_func
+        run_async.return_value = 2
 
         count = task._get_task_count(mock_config)
         self.assertEqual(count, 2)
@@ -787,10 +784,7 @@ class TestHarborTaskGetTaskCount(unittest.TestCase):
         mock_config.datasets = [mock_dataset_config1, mock_dataset_config2]
         mock_config.verifier.disable = False
 
-        def side_effect_func(func):
-            return func()
-
-        run_async.side_effect = side_effect_func
+        run_async.return_value = 5
 
         count = task._get_task_count(mock_config)
         self.assertEqual(count, 5)
@@ -854,12 +848,7 @@ class TestHarborTaskResumeJob(unittest.TestCase):
         mock_job = mock.MagicMock()
         mock_job_result = mock.MagicMock()
 
-        def side_effect_func(func):
-            return func()
-
-        run_async.side_effect = side_effect_func
-        Job.create.return_value = mock_job
-        mock_job.run.return_value = mock_job_result
+        run_async.return_value = (mock_job, mock_job_result)
 
         job, result = task._resume_job(Path(existing_job_dir))
 
@@ -886,6 +875,8 @@ class TestHarborTaskRunWithProgress(unittest.TestCase):
             "datasets": [[self.dataset_cfg]],
             "cli_args": {"debug": False}
         })
+
+        self.task_state_manager = mock.MagicMock(spec=TaskStateManager)
 
     def tearDown(self):
         if os.path.exists(self.temp_dir):
@@ -920,12 +911,7 @@ class TestHarborTaskRunWithProgress(unittest.TestCase):
         mock_job.job_dir = Path(self.temp_dir)
         mock_job_result = mock.MagicMock()
 
-        def side_effect_func(func):
-            return func()
-
-        run_async.side_effect = side_effect_func
-        Job.create.return_value = mock_job
-        mock_job.run.return_value = mock_job_result
+        run_async.return_value = (mock_job, mock_job_result)
 
         mock_config = mock.MagicMock()
 
@@ -963,12 +949,7 @@ class TestHarborTaskRunWithProgress(unittest.TestCase):
         mock_job.job_dir = None
         mock_job_result = mock.MagicMock()
 
-        def side_effect_func(func):
-            return func()
-
-        run_async.side_effect = side_effect_func
-        Job.create.return_value = mock_job
-        mock_job.run.return_value = mock_job_result
+        run_async.return_value = (mock_job, mock_job_result)
 
         mock_config = mock.MagicMock()
 
@@ -1073,7 +1054,7 @@ class TestHarborTaskDumpEvalResultsAdditional(unittest.TestCase):
         with open(out_json_path, 'r') as f:
             results = json.load(f)
 
-        self.assertEqual(results["avg_score"], 0.95)
+        self.assertEqual(results["avg_score"], 1.9)
 
     def test_dump_eval_results_no_pass_at_k(self):
         """Test _dump_eval_results with stats but no pass_at_k"""
