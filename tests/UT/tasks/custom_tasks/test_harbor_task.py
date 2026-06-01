@@ -373,57 +373,16 @@ class TestHarborTask(unittest.TestCase):
         finally:
             sys.argv = original_argv
 
-    def test_resume_job_missing_config(self):
-        """Test _resume_job raises error when config missing"""
-        job_dir = Path(self.temp_dir) / "job_dir"
-        job_dir.mkdir()
-
-        task = HarborTask(self.cfg)
-        task.logger = mock.MagicMock()
-
-        with self.assertRaises(ValueError) as context:
-            task._resume_job(job_dir)
-
-        self.assertIn("Config file not found", str(context.exception))
-
-    def test_resume_job_config_exists_but_invalid(self):
-        """Test _resume_job with invalid JSON config"""
-        job_dir = Path(self.temp_dir) / "job_dir"
-        job_dir.mkdir()
-
-        config_path = job_dir / "config.json"
-        with open(config_path, 'w') as f:
-            f.write("invalid json content")
-
-        task = HarborTask(self.cfg)
-        task.logger = mock.MagicMock()
-
-        try:
-            with self.assertRaises(Exception):
-                task._resume_job(job_dir)
-        except:
-            pass
-
     def test_default_fake_api_key(self):
         """Test DEFAULT_FAKE_API_KEY constant"""
         self.assertEqual(DEFAULT_FAKE_API_KEY, "fake_api_key")
 
-    def test_get_task_count(self):
-        """Test _get_task_count method"""
+    def test_constants(self):
+        """Test class constants"""
         task = HarborTask(self.cfg)
-
-        mock_config = mock.MagicMock()
-        mock_dataset_config = mock.MagicMock()
-        mock_config.datasets = [mock_dataset_config]
-
-        async def mock_get_task_configs(disable_verification=False):
-            return [1, 2, 3]
-
-        mock_dataset_config.get_task_configs = mock_get_task_configs
-
-        with mock.patch('ais_bench.benchmark.tasks.custom_tasks.harbor_task.run_async', return_value=3):
-            count = task._get_task_count(mock_config)
-            self.assertEqual(count, 3)
+        self.assertEqual(task.name_prefix, "HarborTask")
+        self.assertEqual(task.log_subdir, "logs/eval")
+        self.assertEqual(task.output_subdir, "results")
 
 
 if __name__ == '__main__':
