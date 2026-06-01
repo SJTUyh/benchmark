@@ -292,9 +292,9 @@ class TestHarborSummarizer(unittest.TestCase):
              mock.patch.object(summarizer, '_print_harbor_details'), \
              mock.patch('mmengine.mkdir_or_exist'), \
              mock.patch('builtins.print'), \
-             mock.patch('builtins.open', mock.mock_open()):
-            with mock.patch('mmengine.utils.strftime', return_value="20230101_120000"):
-                result = summarizer.summarize()
+             mock.patch('builtins.open', mock.mock_open()), \
+             mock.patch('time.strftime', return_value="20230101_120000"):
+            summarizer.summarize()
 
     @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
     @mock.patch('ais_bench.benchmark.summarizers.harbor.model_abbr_from_cfg')
@@ -449,7 +449,7 @@ class TestHarborSummarizer(unittest.TestCase):
              mock.patch('builtins.print') as mock_print, \
              mock.patch('builtins.open', mock.mock_open()) as mock_file:
 
-            with mock.patch('mmengine.utils.strftime', return_value="20230101_120000"):
+            with mock.patch('time.strftime', return_value="20230101_120000"):
                 summarizer.summarize()
 
     @mock.patch('ais_bench.benchmark.summarizers.harbor.AISLogger')
