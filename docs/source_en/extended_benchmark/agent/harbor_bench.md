@@ -1,6 +1,6 @@
-# Harbor Benchmark
+# Harbor Terminal-Bench
 
-## Harbor Benchmark Introduction
+## Harbor Introduction
 
 **Harbor** is a framework for evaluating AI agents, supporting various benchmark tasks including Terminal-Bench-2.
 
@@ -38,7 +38,7 @@ Official repository: [https://github.com/harbor-framework/harbor](https://github
 - **Resume capability**: Detect existing results, skip completed tasks
 - **Trace export**: Export traces via `--export-traces`
 
-## Quick Start with Harbor Benchmark in AISBench
+## Quick Start with Harbor Terminal-Bench 2.0 in AISBench
 
 ### 1. Prepare Inference Services
 

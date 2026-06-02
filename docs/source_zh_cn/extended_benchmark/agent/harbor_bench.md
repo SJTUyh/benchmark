@@ -1,6 +1,6 @@
-# Harbor Benchmark
+# Harbor Terminal-Bench
 
-## Harbor Benchmark 简介
+## Harbor 简介
 
 **Harbor** 是一个用于评估 AI Agent 的框架，支持运行多种 benchmark 任务，包括 Terminal-Bench-2 等。
 
@@ -38,7 +38,7 @@
 - **断点续测**：检测已有结果，自动跳过已完成任务
 - **轨迹导出**：通过 `--export-traces` 导出轨迹
 
-## AISBench 中快速上手 Harbor Benchmark
+## AISBench 中快速上手基于Harbor的Terminal-Bench 2.0 测评
 
 ### 1. 准备推理服务
 
