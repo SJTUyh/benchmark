@@ -195,14 +195,16 @@ class TestHarborTask(unittest.TestCase):
         mock_job = mock.MagicMock()
         mock_job.config = mock.MagicMock()
 
+        mock_trials = []
         for score in [1.0, 1.0, 0.0]:
             mock_trial = mock.MagicMock()
             mock_trial.exception_info = None
             mock_trial.verifier_result = mock.MagicMock()
             mock_trial.verifier_result.rewards = {"score": score}
+            mock_trials.append(mock_trial)
 
         mock_job_result = mock.MagicMock()
-        mock_job_result.trial_results = [mock_trial, mock_trial, mock_trial]
+        mock_job_result.trial_results = mock_trials
         mock_job_result.n_total_trials = 3
         mock_job_result.stats = None
 
@@ -224,13 +226,15 @@ class TestHarborTask(unittest.TestCase):
         mock_job = mock.MagicMock()
         mock_job.config = mock.MagicMock()
 
+        mock_trials = []
         for exc_type in ["AgentTimeoutError", "AgentTimeoutError", "VerifierError"]:
             mock_trial = mock.MagicMock()
             mock_trial.exception_info = mock.MagicMock()
             mock_trial.exception_info.exception_type = exc_type
+            mock_trials.append(mock_trial)
 
         mock_job_result = mock.MagicMock()
-        mock_job_result.trial_results = [mock_trial, mock_trial, mock_trial]
+        mock_job_result.trial_results = mock_trials
         mock_job_result.n_total_trials = 3
         mock_job_result.stats = None
 
