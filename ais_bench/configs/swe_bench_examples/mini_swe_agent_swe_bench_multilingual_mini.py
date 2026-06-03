@@ -24,11 +24,7 @@ datasets = [
         type=SWEBenchDataset,
         abbr="swebench_multilingual_mini",
         # Relative to AIS_BENCH_DATASETS_CACHE (default: project root); missing -> HF download
-<<<<<<< HEAD
-        path="", # necessary for mini datasets, get dataset from https://modelers.cn/datasets/AISBench/SWE-Bench_Multilingual_mini
-=======
         path="",  # Set local path to the mini dataset. Download from https://modelers.cn/datasets/AISBench/SWE-Bench_Multilingual_mini
->>>>>>> master_center
         name="multilingual",
         split="test",
         step_limit=STEP_LIMIT,
