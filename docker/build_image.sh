@@ -216,18 +216,13 @@ if [ "$multi_arch" == "1" ]; then
         echo "  - ${arch_image_amd64}"
         echo "  - ${arch_image_arm64}"
 
-        docker manifest create ${manifest_image_name} \
+        docker buildx imagetools create \
+            -t ${manifest_image_name} \
             ${arch_image_amd64} \
             ${arch_image_arm64}
 
-        docker manifest annotate ${manifest_image_name} ${arch_image_amd64} --arch amd64
-        docker manifest annotate ${manifest_image_name} ${arch_image_arm64} --arch arm64
-
-        echo "推送多架构manifest list..."
-        docker manifest push ${manifest_image_name}
-
         if [ $? -ne 0 ]; then
-            echo "错误：manifest推送失败"
+            echo "错误：多架构manifest创建失败"
             exit 1
         fi
 
