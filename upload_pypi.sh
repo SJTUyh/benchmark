@@ -15,7 +15,8 @@ echo "Installing build dependencies..."
 pip install nltk==3.8 build twine
 
 echo "Building package..."
-python -m build --no-isolation
+python -m build --no-isolation --sdist
+python -m build --no-isolation --wheel
 
 VERSION=$(python setup.py --version 2>/dev/null || git describe --abbrev=0 --tags | sed 's/^v//')
 
