@@ -12,7 +12,7 @@ fi
 rm -rf dist/ build/ *.egg-info
 
 echo "Building package..."
-python -m build
+python -m build --no-isolation
 
 VERSION=$(python setup.py --version 2>/dev/null || git describe --abbrev=0 --tags | sed 's/^v//')
 
