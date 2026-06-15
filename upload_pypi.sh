@@ -11,6 +11,9 @@ fi
 
 rm -rf dist/ build/ *.egg-info
 
+echo "Installing build dependencies..."
+pip install nltk==3.8 build twine
+
 echo "Building package..."
 python -m build --no-isolation
 
