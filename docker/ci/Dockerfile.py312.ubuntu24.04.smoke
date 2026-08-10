@@ -1,0 +1,199 @@
+# =============================================================================
+# 冒烟测试专用镜像：基于 Docker Hub 的 ubuntu:24.04 + Python 3.12
+# -----------------------------------------------------------------------------
+# 参考：
+#   - 依赖安装内容：docker/ubuntu/Dockerfile.py312.ubuntu24.04
+#   - 普通用户配置：docker/ci/Dockerfile.example.smoke（APP_USER=ais_bench_smoke）
+# 用途：
+#   配合 .github/workflows/run_smoke_test_pr_and_daily.yml，在 self-hosted runner
+#   中以非 root 用户身份准备 benchmark 运行环境，最后删除源码（避免源码残留）
+# =============================================================================
+
+# ============ 基础镜像 ============
+FROM ubuntu:24.04
+
+# ============ 核心环境变量 ============
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# pip 核心配置：普通用户安装到用户目录，禁用缓存
+ENV PIP_ROOT_USER_ACTION=ignore
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple
+
+# 自定义用户信息（推荐UID/GID避免冲突）
+# 通过 --build-arg 可覆盖为宿主机 ais_bench_smoke 用户信息：
+#   docker build --build-arg APP_USER=$(id -un ais_bench_smoke) \
+#                 --build-arg APP_UID=$(id -u ais_bench_smoke) \
+#                 --build-arg APP_GID=$(id -g ais_bench_smoke) -t ...
+ARG APP_USER=ais_bench_smoke
+ARG APP_UID=1013
+ARG APP_GID=1015
+
+ENV USER_HOME=/home/${APP_USER}
+
+# 关键修复：将 Python 用户目录的 bin 加入 PATH（永久生效）
+ENV PATH="${USER_HOME}/.local/bin:${PATH}"
+
+ARG GIT_TAG=latest
+
+# ============ 1. Root 阶段：apt 源配置 + 安装系统依赖 + 安装 Docker ============
+RUN ARCH=$(uname -m) && \
+    if [ "$(uname -m)" = "x86_64" ]; then \
+        echo "deb http://repo.huaweicloud.com/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list; \
+    else \
+        echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble main restricted universe multiverse" > /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+        echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list; \
+    fi && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        wget \
+        unzip \
+        vim \
+        lsof \
+        net-tools \
+        python3.12 \
+        python3.12-dev \
+        python3.12-venv \
+        python3-pip \
+        iptables \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# 安装 Docker Engine (>= 20.0) 与 Docker Compose v2 (>= 2.0.0)
+# 用于支持 terminal-bench 等 agent 测评中的嵌套容器执行
+# 依赖包已上传至华为云 OBS
+# 注意：二进制安装必须 root 权限，故放在用户切换前
+ARG DOCKER_VERSION=27.3.1
+RUN ARCH=$(uname -m) && \
+    curl -fsSL "https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/resources/docker-${DOCKER_VERSION}-${ARCH}.tgz" \
+        -o /tmp/docker.tgz && \
+    tar -xzf /tmp/docker.tgz -C /tmp && \
+    mv /tmp/docker/* /usr/local/bin/ && \
+    rm -rf /tmp/docker /tmp/docker.tgz && \
+    mkdir -p /usr/local/lib/docker/cli-plugins && \
+    curl -fsSL "https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/resources/docker-compose-linux-${ARCH}" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && \
+    docker --version && \
+    docker compose version && \
+    dockerd --version
+
+# ============ 2. 创建普通用户 ==========
+RUN groupadd -g ${APP_GID} ${APP_USER} && \
+    useradd -m -u ${APP_UID} -g ${APP_GID} -d ${USER_HOME} -s /bin/bash ${APP_USER} && \
+    mkdir -p ${USER_HOME}/app && \
+    chown -R ${APP_USER}:${APP_USER} ${USER_HOME}
+
+# ============ 3. 切换工作目录 + 切换到普通用户（关键：后续所有操作非 root） ==========
+WORKDIR ${USER_HOME}
+USER ${APP_USER}
+
+# ============ 4. 拉取 benchmark 源码（普通用户执行） ==========
+RUN git clone https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git ${USER_HOME}/benchmark
+
+WORKDIR ${USER_HOME}/benchmark
+
+# 切换到指定 tag（默认 latest 则不切换）
+RUN if [ "$GIT_TAG" != "latest" ]; then \
+        git fetch --tags && \
+        git checkout tags/$GIT_TAG -b $GIT_TAG-branch; \
+    fi
+
+# ============ 5. 安装 benchmark 全部 Python 依赖（普通用户身份，安装到 ~/.local） ==========
+
+# 5.1 安装 torch（CPU 版本，先下 wheel 再装）
+RUN ARCH=$(uname -m) && \
+    wget -P /tmp https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/benchmark/dependencies/torch-2.12.0%2Bcpu-cp312-cp312-manylinux_2_28_${ARCH}.whl && \
+    python3.12 -m pip install --no-cache-dir /tmp/torch-2.12.0+cpu-cp312-cp312-manylinux_2_28_${ARCH}.whl \
+        -i https://repo.huaweicloud.com/repository/pypi/simple \
+        --trusted-host repo.huaweicloud.com \
+        --use-pep517 && \
+    rm /tmp/torch-2.12.0+cpu-cp312-cp312-manylinux_2_28_${ARCH}.whl
+
+# 5.2 rouge_chinese
+RUN pip install --no-cache-dir \
+        -i https://repo.huaweicloud.com/repository/pypi/simple \
+        --trusted-host repo.huaweicloud.com \
+        --use-pep517 \
+        rouge_chinese
+
+# 5.3 requirements/runtime.txt
+RUN if [ -f "requirements/runtime.txt" ]; then \
+        pip install --no-cache-dir \
+            -r requirements/runtime.txt \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --use-pep517; \
+    fi
+
+# 5.4 requirements/extra.txt
+RUN if [ -f "requirements/extra.txt" ]; then \
+        pip install --no-cache-dir \
+            -r requirements/extra.txt \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --use-pep517; \
+    fi
+
+# 5.5 requirements/api.txt
+RUN if [ -f "requirements/api.txt" ]; then \
+        pip install --no-cache-dir \
+            -r requirements/api.txt \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --use-pep517; \
+    fi
+
+# 5.6 requirements/datasets/bfcl_dependencies.txt（--no-deps）
+RUN if [ -f "requirements/datasets/bfcl_dependencies.txt" ]; then \
+        pip install --no-cache-dir \
+            -r requirements/datasets/bfcl_dependencies.txt \
+            --no-deps \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --use-pep517; \
+    fi
+
+# 5.7 nltk==3.8
+RUN pip install --no-cache-dir \
+        -i https://repo.huaweicloud.com/repository/pypi/simple \
+        --trusted-host repo.huaweicloud.com \
+        --use-pep517 \
+        nltk==3.8
+
+# 5.8 安装 benchmark 包本身（采用非 -e 模式：彻底安装到 site-packages，确保删除源码后包仍可用）
+RUN if [ -f "setup.py" ]; then \
+        pip install --no-cache-dir \
+            ./ \
+            -i https://repo.huaweicloud.com/repository/pypi/simple \
+            --trusted-host repo.huaweicloud.com \
+            --use-pep517; \
+    fi
+
+# ============ 6. 下载 NLTK 离线数据到用户目录 ==========
+RUN curl -o /tmp/punkt.zip https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/benchmark/dependencies/punkt.zip && \
+    mkdir -p ${USER_HOME}/nltk_data/tokenizers && \
+    unzip -q /tmp/punkt.zip -d ${USER_HOME}/nltk_data/tokenizers && \
+    rm /tmp/punkt.zip
+
+ENV NLTK_DATA=${USER_HOME}/nltk_data
+
+# 验证 NLTK 安装
+RUN python3.12 -c "import nltk; from nltk.tokenize import word_tokenize; tokens = word_tokenize('Hello World! 测试NLTK 3.8离线安装'); print('分词结果：', tokens)"
+
+# ============ 7. 删除工具源码本身（仅保留已安装的依赖，避免源码泄漏/残留） ==========
+WORKDIR ${USER_HOME}
+
+RUN rm -rf ${USER_HOME}/benchmark
+
+# ============ 8. 默认启动命令（按需修改） ==========
+CMD ["bash", "-c", "echo 'ais_bench_smoke image ready'; echo \"current user: $(whoami)\"; which python3.12; python3.12 -V"]
