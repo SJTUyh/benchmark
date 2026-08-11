@@ -50,9 +50,15 @@ RUN ARCH=$(uname -m) && \
         echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
         echo "deb http://repo.huaweicloud.com/ubuntu-ports/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list; \
     fi && \
-    # Ubuntu 24.04 自带 /etc/apt/sources.list.d/ubuntu.sources（DEB822 格式），会绕过主 sources.list，
-    # 必须删掉；同时删 docker-clean 钩子，避免 Post-Invoke 清理缓存时报错
-    rm -f /etc/apt/apt.conf.d/docker-clean /etc/apt/sources.list.d/ubuntu.sources && \
+    # 一次彻底清理：
+    #   1) find 兜底删除所有 docker-* 命名的 apt 钩子（不只 docker-clean，还可能有 docker-no-languages / docker-gpg 等）
+    #   2) 删除 Ubuntu 24.04 默认 /etc/apt/sources.list.d/ubuntu.sources（DEB822，会绕过主 sources.list），
+    #      否则仍然从 ports.ubuntu.com 下载 67 MB 的源数据
+    #   3) 清理 apt lock，避免之前构建残留的锁阻塞本轮 update
+    find /etc/apt/apt.conf.d -type f -name 'docker-*' -delete 2>/dev/null || true; \
+    rm -f /etc/apt/sources.list.d/ubuntu.sources \
+          /var/lib/apt/lists/lock \
+          /var/cache/apt/archives/lock && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         git \
