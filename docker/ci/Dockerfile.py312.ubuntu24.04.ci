@@ -77,25 +77,6 @@ RUN ARCH=$(uname -m) && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 安装 Docker Engine (>= 20.0) 与 Docker Compose v2 (>= 2.0.0)
-# 用于支持 terminal-bench 等 agent 测评中的嵌套容器执行
-# 依赖包已上传至华为云 OBS
-# 注意：二进制安装必须 root 权限，故放在用户切换前
-ARG DOCKER_VERSION=27.3.1
-RUN ARCH=$(uname -m) && \
-    curl -fsSL "https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/resources/docker-${DOCKER_VERSION}-${ARCH}.tgz" \
-        -o /tmp/docker.tgz && \
-    tar -xzf /tmp/docker.tgz -C /tmp && \
-    mv /tmp/docker/* /usr/local/bin/ && \
-    rm -rf /tmp/docker /tmp/docker.tgz && \
-    mkdir -p /usr/local/lib/docker/cli-plugins && \
-    curl -fsSL "https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/resources/docker-compose-linux-${ARCH}" \
-        -o /usr/local/lib/docker/cli-plugins/docker-compose && \
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && \
-    docker --version && \
-    docker compose version && \
-    dockerd --version
-
 # ============ 2. 创建普通用户 ==========
 RUN groupadd -g ${APP_GID} ${APP_USER} && \
     useradd -m -u ${APP_UID} -g ${APP_GID} -d ${USER_HOME} -s /bin/bash ${APP_USER} && \
