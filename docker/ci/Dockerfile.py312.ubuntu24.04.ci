@@ -96,7 +96,7 @@ WORKDIR ${USER_HOME}
 USER ${APP_USER}
 
 # ============ 4. 拉取 benchmark 源码（普通用户执行） ==========
-RUN git clone https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git ${USER_HOME}/benchmark
+RUN git clone https://github.com/AISBench/benchmark.git ${USER_HOME}/benchmark
 
 WORKDIR ${USER_HOME}/benchmark
 
