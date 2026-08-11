@@ -77,6 +77,36 @@ RUN ARCH=$(uname -m) && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
+# ============ 1.5 编译关闭 threaded DNS resolver 的 git（链到旧版 libcurl 7.65.3） ============
+# 真正根因：libcurl 7.66+ 默认 CURLOPT_DNS_LOCAL_THREADED=1，git clone 在 self-hosted runner 受限环境
+# 下起 worker thread 做 DNS 解析，docker seccomp profile 拦截 pthread_create() → 'getaddrinfo() thread failed to start'。
+# ulimit (-u/-s/-n) 在验证中已确认都不是限制（已 -u 65535, -s unlimited），seccomp 才是根因。
+# 彻底修复：编译 git 链到 libcurl 7.65.3（7.66 之前版本，没有 CURLOPT_DNS_LOCAL_THREADED option，
+# git 自动 fallback 到 sync getaddrinfo，不创建 worker thread）。仍使用 'git clone' 命令。
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential autoconf libtool pkg-config \
+        zlib1g-dev libssl-dev gettext perl && \
+    cd /tmp && \
+    curl -fsSL https://curl.se/download/curl-7.65.3.tar.gz -o curl.tgz && \
+    tar xzf curl.tgz && cd curl-7.65.3 && \
+    ./configure --disable-shared --disable-threaded-resolver --prefix=/usr/local/curl-nothreads && \
+    make -j$(nproc) install && \
+    cd /tmp && \
+    curl -fsSL https://github.com/git/git/archive/refs/tags/v2.45.2.tar.gz -o git.tgz && \
+    tar xzf git.tgz && cd git-2.45.2 && \
+    make configure && \
+    ./configure --prefix=/usr/local --with-curl=/usr/local/curl-nothreads && \
+    make -j$(nproc) install && \
+    rm -rf /tmp/curl-7.65.3 /tmp/curl.tgz /tmp/git-2.45.2 /tmp/git.tgz && \
+    apt-get purge -y --auto-remove \
+        build-essential autoconf libtool pkg-config && \
+    apt-get autoremove -y && apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    # 用 /usr/local/bin/git（PATH 优先）覆盖系统的 /usr/bin/git
+    ln -sf /usr/local/bin/git /usr/bin/git && \
+    /usr/local/bin/git --version
+
 # ============ 2. 创建普通用户 ==========
 RUN groupadd -g ${APP_GID} ${APP_USER} && \
     useradd -m -u ${APP_UID} -g ${APP_GID} -d ${USER_HOME} -s /bin/bash ${APP_USER} && \
@@ -93,18 +123,9 @@ WORKDIR ${USER_HOME}
 USER ${APP_USER}
 
 # ============ 4. 拉取 benchmark 源码（普通用户执行） ==========
-# 关键修复：libcurl 7.66+ 默认开启 CURLOPT_DNS_LOCAL_THREADED=1，让 DNS 解析跑在 worker thread。
-# 在 self-hosted runner / 受限容器环境下，pthread_create() 因 ulimit(RLIMIT_NPROC/RLIMIT_STACK)
-# 或 docker seccomp profile 失败，会抛 'fatal: ... getaddrinfo() thread failed to start'。
-# 这里用一个 bash -lc 先把可用资源拉到足够大，再 exec git clone（避免 libcurl 起线程失败）。
-RUN bash -lc 'set -e; \
-        ulimit -s unlimited 2>/dev/null || true; \
-        ulimit -n 65536    2>/dev/null || true; \
-        ulimit -u 65535    2>/dev/null || true; \
-        echo "[INFO] current ulimit: $(ulimit -a 2>/dev/null | tr "\n" "|")"; \
-        GIT_CURL_VERBOSE=1 GIT_TRACE=1 git clone \
-            https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git \
-            ${USER_HOME}/benchmark'
+# 上一阶段已经把 git 重新编译为链接旧版 libcurl 7.65.3 的版本，没有 threaded DNS resolver，
+# 此处直接使用普通的 git clone 命令即可正常解析（不再需要 ulimit/verbose shim）。
+RUN git clone https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git ${USER_HOME}/benchmark
 
 WORKDIR ${USER_HOME}/benchmark
 
