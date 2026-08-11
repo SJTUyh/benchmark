@@ -18,7 +18,10 @@ ENV PATH="${USER_HOME}/.local/bin:${PATH}"
 # ========== 1. Root阶段：安装系统依赖+创建用户 ==========
     # ========== 创建普通用户 ==========
     # 创建用户组 → 创建用户（-m：自动创建主目录） → 设置权限
-RUN apt update && apt install -y lsof net-tools && rm -rf /var/lib/apt/lists/*
+RUN echo "deb https://repo.huaweicloud.com/repository/debian/ bullseye main contrib" > /etc/apt/sources.list && \
+    echo "deb https://repo.huaweicloud.com/repository/debian/ bullseye-updates main contrib" >> /etc/apt/sources.list && \
+    echo "deb https://repo.huaweicloud.com/repository/debian-security/ bullseye-security main contrib" >> /etc/apt/sources.list && \
+    apt update && apt install -y lsof net-tools && rm -rf /var/lib/apt/lists/*
 RUN groupadd -g ${APP_GID} ${APP_USER} && \
     useradd -m -u ${APP_UID} -g ${APP_GID} -d ${USER_HOME} -s /bin/bash ${APP_USER} && \
     # 创建工作目录（后续挂载/代码存放）
