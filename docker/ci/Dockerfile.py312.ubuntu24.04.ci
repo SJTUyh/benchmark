@@ -93,7 +93,18 @@ WORKDIR ${USER_HOME}
 USER ${APP_USER}
 
 # ============ 4. 拉取 benchmark 源码（普通用户执行） ==========
-RUN git clone https://gh-proxy.com/https://github.com/AISBench/benchmark.git ${USER_HOME}/benchmark
+# 关键修复：libcurl 7.66+ 默认开启 CURLOPT_DNS_LOCAL_THREADED=1，让 DNS 解析跑在 worker thread。
+# 在 self-hosted runner / 受限容器环境下，pthread_create() 因 ulimit(RLIMIT_NPROC/RLIMIT_STACK)
+# 或 docker seccomp profile 失败，会抛 'fatal: ... getaddrinfo() thread failed to start'。
+# 这里用一个 bash -lc 先把可用资源拉到足够大，再 exec git clone（避免 libcurl 起线程失败）。
+RUN bash -lc 'set -e; \
+        ulimit -s unlimited 2>/dev/null || true; \
+        ulimit -n 65536    2>/dev/null || true; \
+        ulimit -u 65535    2>/dev/null || true; \
+        echo "[INFO] current ulimit: $(ulimit -a 2>/dev/null | tr "\n" "|")"; \
+        GIT_CURL_VERBOSE=1 GIT_TRACE=1 git clone \
+            https://gh-proxy.test.osinfra.cn/https://github.com/AISBench/benchmark.git \
+            ${USER_HOME}/benchmark'
 
 WORKDIR ${USER_HOME}/benchmark
 
