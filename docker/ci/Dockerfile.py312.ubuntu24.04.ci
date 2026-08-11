@@ -93,6 +93,16 @@ RUN groupadd -g ${APP_GID} ${APP_USER} && \
     mkdir -p ${USER_HOME}/app && \
     chown -R ${APP_USER}:${APP_USER} ${USER_HOME}
 
+# ============ 2.5 写入普通用户全局 gitconfig（强制走内部 gh-proxy，替换 https / ssh 两种协议） ==========
+RUN cat > ${USER_HOME}/.gitconfig <<'GITCONFIG_EOF'
+[url "https://gh-proxy.test.osinfra.cn/https://github.com/"]
+	insteadOf = https://github.com/
+[url "https://gh-proxy.test.osinfra.cn/ssh://git@github.com/"]
+	insteadOf = git@github.com:
+GITCONFIG_EOF
+RUN chown ${APP_USER}:${APP_USER} ${USER_HOME}/.gitconfig && \
+    chmod 644 ${USER_HOME}/.gitconfig
+
 # ============ 3. 切换工作目录 + 切换到普通用户（关键：后续所有操作非 root） ==========
 WORKDIR ${USER_HOME}
 USER ${APP_USER}
