@@ -83,10 +83,10 @@ def _check_metric(metric_name, samples, limits, expected_total, early_abort_rati
             st = stats[pxx]
             if st["current"] > threshold:
                 return False, (
-                    f"最终判定不满足: {metric_name}[{pxx}]={st['current']:.2f}ms "
-                    f"> 门限{threshold}ms"
+                    f"Final check failed: {metric_name}[{pxx}]={st['current']:.2f}ms "
+                    f"> threshold {threshold}ms"
                 ), stats
-        return True, f"{metric_name} 最终判定满足", stats
+        return True, f"{metric_name} final check passed", stats
 
     # 运行中提前判定：违反比例 > 允许比例 即不满足
     denominator = expected_total if expected_total else len(samples)
@@ -97,10 +97,10 @@ def _check_metric(metric_name, samples, limits, expected_total, early_abort_rati
         ratio = st["violating"] / denominator
         if ratio > st["allowed"]:
             return False, (
-                f"提前打断: {metric_name}[{pxx}] 违反比例{ratio:.2%} "
-                f"(违反{st['violating']}/{denominator}) > 允许{st['allowed']:.2%}"
+                f"Early abort: {metric_name}[{pxx}] violation ratio {ratio:.2%} "
+                f"({st['violating']}/{denominator}) > allowed {st['allowed']:.2%}"
             ), stats
-    return True, f"{metric_name} 运行中满足", stats
+    return True, f"{metric_name} passes so far", stats
 
 
 def requirement_1(ttft_ms, tpot_ms, ttft_limits, tpot_limits,
@@ -140,8 +140,8 @@ def requirement_1(ttft_ms, tpot_ms, ttft_limits, tpot_limits,
         }
         if success_rate < success_rate_threshold:
             return False, (
-                f"预期成功率{success_rate:.2%} < 门限{success_rate_threshold:.2%} "
-                f"(失败{failed_requests}/{total})"
+                f"Expected success rate {success_rate:.2%} < threshold "
+                f"{success_rate_threshold:.2%} (failed {failed_requests}/{total})"
             ), details
 
     for metric_name, samples, limits in (
@@ -149,13 +149,13 @@ def requirement_1(ttft_ms, tpot_ms, ttft_limits, tpot_limits,
         ("TPOT", tpot_ms, tpot_limits),
     ):
         if not finished and len(samples) < min_samples:
-            reasons.append(f"{metric_name} 样本不足({len(samples)}<{min_samples})，暂不判定")
+            reasons.append(f"{metric_name} insufficient samples ({len(samples)}<{min_samples}), skip for now")
             details[metric_name] = {}
             continue
         if not samples:
             if finished:
-                return False, f"最终判定不满足: {metric_name} 无有效样本", details
-            reasons.append(f"{metric_name} 尚无样本")
+                return False, f"Final check failed: {metric_name} has no valid samples", details
+            reasons.append(f"{metric_name} no samples yet")
             details[metric_name] = {}
             continue
         ok, reason, stats = _check_metric(
@@ -253,7 +253,7 @@ def clear_kv_cache(host_ip="localhost", host_port=8080, model_name=None,
     import urllib.request
 
     base = f"http://{host_ip}:{host_port}"
-    last_err = "未知错误"
+    last_err = "unknown error"
     for path in ("/reset_prefix_cache", "/v1/cache/delete"):
         url = base + path
         req = urllib.request.Request(
@@ -264,11 +264,11 @@ def clear_kv_cache(host_ip="localhost", host_port=8080, model_name=None,
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if 200 <= resp.status < 300:
                     return True, url
-                last_err = f"{url} 返回 HTTP {resp.status}"
+                last_err = f"{url} returned HTTP {resp.status}"
         except urllib.error.HTTPError as e:
-            last_err = f"{url} 返回 HTTP {e.code}"
+            last_err = f"{url} returned HTTP {e.code}"
         except Exception as e:
-            last_err = f"{url} 请求失败: {e}"
+            last_err = f"{url} request failed: {e}"
     return False, last_err
 
 
@@ -729,12 +729,12 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
         if monitor_dir is None:
             monitor_dir = resolve_monitor_dir(collector, args)
             if monitor_dir is not None:
-                print(f"[Round {round_no}] 监控落盘性能数据目录: {monitor_dir}")
+                print(f"[Round {round_no}] monitoring on-disk perf data dir: {monitor_dir}")
                 monitor = PerfMonitor(monitor_dir)
 
         if expected_total is None and collector.expected_total is not None:
             expected_total = collector.expected_total
-            print(f"[Round {round_no}] 解析到预期总请求数: {expected_total}")
+            print(f"[Round {round_no}] parsed expected total requests: {expected_total}")
 
         if monitor is not None:
             monitor.scan()
@@ -750,7 +750,7 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
                 success_rate_threshold=args.success_rate_threshold,
             )
             if not ok:
-                print(f"[Round {round_no}] 要求1不满足，打断本轮: {reason}")
+                print(f"[Round {round_no}] requirement 1 not met, interrupting round: {reason}")
                 terminate_process(proc)
                 interrupted = True
 
@@ -797,7 +797,7 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
     )
     passed = ok and not interrupted
     if interrupted:
-        reason = f"提前打断: {reason}" if reason else "提前打断"
+        reason = f"Early abort: {reason}" if reason else "Early abort"
 
     # ---- 汇总数值 ----
     requests_completed = len(final_ttft)
@@ -882,13 +882,14 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
     if exp_dir is not None:
         host_ip, host_port = extract_service_endpoint(exp_dir)
         if host_ip is None:
-            print(f"[Round {round_no}] 未从落盘模型配置解析到 host_ip/host_port，跳过 KV cache 清理")
+            print(f"[Round {round_no}] cannot resolve host_ip/host_port from dumped model config, "
+                  "skip KV cache clearing")
             record["_kv_cache_cleared"] = False
         else:
             cleared, msg = clear_kv_cache(host_ip, host_port)
             record["_kv_cache_cleared"] = cleared
-            print(f"[Round {round_no}] 清理 KV cache ({host_ip}:{host_port}): "
-                  f"{'成功' if cleared else '失败: ' + msg}")
+            print(f"[Round {round_no}] clearing KV cache ({host_ip}:{host_port}): "
+                  f"{'success' if cleared else 'failed: ' + msg}")
     else:
         record["_kv_cache_cleared"] = False
     return record
@@ -925,7 +926,7 @@ def _limit_type(value):
     m = re.match(r"^(P\d{1,2}):(\d+(?:\.\d+)?)$", value.strip())
     if not m or not PERCENTILE_PATTERN.match(m.group(1)):
         raise argparse.ArgumentTypeError(
-            f"约束对格式非法: {value!r}，应为 PXX:门限(ms)，如 P90:2000"
+            f"Invalid threshold pair: {value!r}; expected PXX:limit_ms, e.g. P90:2000"
         )
     return (m.group(1), float(m.group(2)))
 
@@ -940,56 +941,61 @@ def normalize_limits(pairs):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="为 ais_bench 性能测试任务寻优 request rate（满足要求1的最高 rate）"
+        description="Search the optimal request rate (highest rate satisfying requirement 1) "
+                    "for an ais_bench performance test task"
     )
     parser.add_argument("--script", required=True,
-                        help='含 ais_bench 基准命令的 shell 脚本路径（脚本须以 "$@" 透传追加参数）')
-    parser.add_argument("--rate-min", type=float, required=True, help="寻优范围下限")
-    parser.add_argument("--rate-max", type=float, required=True, help="寻优范围上限")
+                        help='Shell script containing the ais_bench base command '
+                             '(the script must forward extra args via "$@")')
+    parser.add_argument("--rate-min", type=float, required=True, help="Lower bound of the search range")
+    parser.add_argument("--rate-max", type=float, required=True, help="Upper bound of the search range")
     parser.add_argument("--ttft-threshold", type=_limit_type, action="append", required=True,
-                        metavar="PXX:ms", help="TTFT 门限约束对，如 P90:2000；可重复传入（如 P90/P95 各有门限）")
+                        metavar="PXX:ms",
+                        help="TTFT threshold pair, e.g. P90:2000; repeatable (e.g. separate P90/P95 limits)")
     parser.add_argument("--tpot-threshold", type=_limit_type, action="append", required=True,
-                        metavar="PXX:ms", help="TPOT 门限约束对，如 P90:50；可重复传入")
+                        metavar="PXX:ms", help="TPOT threshold pair, e.g. P90:50; repeatable")
     parser.add_argument("--expected-requests", type=int, default=None,
-                        help="预期总请求数（提前打断判定分母）；缺省自动从看板进度解析")
+                        help="Expected total requests (denominator for early abort); "
+                             "auto-parsed from the task board progress if omitted")
     parser.add_argument("--early-abort-ratio", type=float, default=None,
-                        help="全局允许违反比例；缺省按各百分位推导 (100-PXX)/100")
+                        help="Allowed violation ratio; defaults to (100-PXX)/100 per percentile")
     parser.add_argument("--success-rate-threshold", type=float, default=None,
-                        help="预期成功率门限（预期成功率=(总请求数-失败请求数)/总请求数），"
-                             "如 0.99；低于门限即判定不满足；缺省不校验")
+                        help="Expected success rate threshold "
+                             "(success rate=(total requests-failed requests)/total requests), "
+                             "e.g. 0.99; below threshold means not satisfied; disabled if omitted")
     parser.add_argument("--min-samples", type=int, default=10,
-                        help="已完成样本数低于该值时不提前打断（默认 10）")
+                        help="Do not early-abort until this many completed samples exist (default 10)")
     parser.add_argument("--monitor-interval", type=float, default=5.0,
-                        help="监控轮询间隔秒（默认 5）")
+                        help="Monitoring poll interval in seconds (default 5)")
     parser.add_argument("--descent-factor", type=float, default=0.5,
-                        help="算法1 等比下降因子（默认 0.5）")
+                        help="Multiplicative descent factor of algorithm 1 (default 0.5)")
     parser.add_argument("--tol", type=float, default=0.05,
-                        help="算法1 收敛相对容差（默认 0.05，相对 rate-max）")
-    parser.add_argument("--max-rounds", type=int, default=20, help="最大轮次兜底（默认 20）")
+                        help="Convergence relative tolerance of algorithm 1 (default 0.05, relative to rate-max)")
+    parser.add_argument("--max-rounds", type=int, default=20, help="Max rounds safety cap (default 20)")
     parser.add_argument("--work-dir", type=str, default="outputs/default",
-                        help="ais_bench 工作目录（默认 outputs/default，用于回退定位实验目录）")
+                        help="ais_bench work directory (default outputs/default, used to locate the experiment dir)")
     parser.add_argument("--output-dir", type=str, default="outputs/rate_search",
-                        help="汇总 CSV 与轮次日志输出目录（默认 outputs/rate_search）")
+                        help="Directory for the summary CSV and per-round logs (default outputs/rate_search)")
     parser.add_argument("--model-abbr", type=str, default=None,
-                        help="指定监控的模型 abbr；缺省自动取 performances 下最新子目录")
+                        help="Model abbr to monitor; auto-detected as the newest performances subdir if omitted")
     parser.add_argument("--shell", type=str, default="bash",
-                        help="执行脚本的 shell（默认 bash）")
+                        help="Shell used to execute the script (default bash)")
     args = parser.parse_args()
 
     if args.rate_min <= 0:
-        parser.error("--rate-min 必须为正数")
+        parser.error("--rate-min must be positive")
     if args.rate_min >= args.rate_max:
-        parser.error("--rate-min 必须小于 --rate-max")
+        parser.error("--rate-min must be less than --rate-max")
     if not os.path.isfile(args.script):
-        parser.error(f"--script 文件不存在: {args.script}")
+        parser.error(f"--script file does not exist: {args.script}")
     if args.min_samples < 1:
-        parser.error("--min-samples 必须 >= 1")
+        parser.error("--min-samples must be >= 1")
     if args.monitor_interval <= 0:
-        parser.error("--monitor-interval 必须为正数")
+        parser.error("--monitor-interval must be positive")
     if args.early_abort_ratio is not None and not 0 < args.early_abort_ratio < 1:
-        parser.error("--early-abort-ratio 必须在 (0, 1) 之间")
+        parser.error("--early-abort-ratio must be in (0, 1)")
     if args.success_rate_threshold is not None and not 0 < args.success_rate_threshold <= 1:
-        parser.error("--success-rate-threshold 必须在 (0, 1] 之间")
+        parser.error("--success-rate-threshold must be in (0, 1]")
     return args
 
 
@@ -998,8 +1004,8 @@ def main():
     ttft_limits = normalize_limits(args.ttft_threshold)
     tpot_limits = normalize_limits(args.tpot_threshold)
     sr = args.success_rate_threshold
-    print(f"要求1 约束: TTFT={ttft_limits}, TPOT={tpot_limits}, "
-          f"预期成功率门限={sr if sr is not None else '未启用'}")
+    print(f"requirement 1 constraints: TTFT={ttft_limits}, TPOT={tpot_limits}, "
+          f"success-rate threshold={sr if sr is not None else 'disabled'}")
 
     logs_dir = os.path.join(args.output_dir, "logs")
     os.makedirs(logs_dir, exist_ok=True)
@@ -1026,23 +1032,23 @@ def main():
             })
             append_csv(csv_path, csv_columns, record)
     except KeyboardInterrupt:
-        print("\n用户中断，正在退出...")
+        print("\nInterrupted by user, exiting...")
         sys.exit(130)
 
     # ---- 汇总输出 ----
-    print("\n=== 寻优结束 ===")
-    print(f"汇总 CSV 路径: {os.path.abspath(csv_path)}")
+    print("\n=== Search finished ===")
+    print(f"Summary CSV path: {os.path.abspath(csv_path)}")
     if not history:
-        print("未执行任何轮次")
+        print("No rounds were executed")
         return
     passing = [h for h in history if h["passed"]]
     if passing:
         best = max(passing, key=lambda h: h["rate"])
         rec = best["record"]
-        print(f"最优 request rate: {format_rate(best['rate'])} "
+        print(f"Optimal request rate: {format_rate(best['rate'])} "
               f"(request_throughput={rec.get('request_throughput_req_s') or 'N/A'} req/s)")
     else:
-        print(f"范围内 [{args.rate_min}, {args.rate_max}] 未找到满足要求1的 request rate")
+        print(f"No request rate in range [{args.rate_min}, {args.rate_max}] satisfies requirement 1")
 
 
 if __name__ == "__main__":
