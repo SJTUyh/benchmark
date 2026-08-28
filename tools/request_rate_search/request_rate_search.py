@@ -230,6 +230,78 @@ def algorithm_1(history, rate_min, rate_max, tol=0.05, descent_factor=0.5,
 
 
 # ---------------------------------------------------------------------------
+# 独立函数 3：清空被测 vLLM 服务的 KV cache（可独立改动）
+# ---------------------------------------------------------------------------
+
+def clear_kv_cache(host_ip="localhost", host_port=8080, model_name=None,
+                   timeout=10.0):
+    """清空被测 vLLM 服务的 KV cache（独立函数，可独立改动）。
+
+    依次尝试 vLLM 常见的清缓存接口（/reset_prefix_cache、/v1/cache/delete），
+    任一返回 2xx 即视为成功；全部失败仅返回失败原因，由调用方告警，不抛出异常。
+
+    Args:
+        host_ip: vLLM 服务 IP
+        host_port: vLLM 服务端口
+        model_name: 服务端模型名称（当前接口未用到，保留以便后续扩展）
+        timeout: 单次请求超时秒数
+
+    Returns:
+        (成功: bool, 说明: str)
+    """
+    import urllib.error
+    import urllib.request
+
+    base = f"http://{host_ip}:{host_port}"
+    last_err = "未知错误"
+    for path in ("/reset_prefix_cache", "/v1/cache/delete"):
+        url = base + path
+        req = urllib.request.Request(
+            url, data=b"{}", method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if 200 <= resp.status < 300:
+                    return True, url
+                last_err = f"{url} 返回 HTTP {resp.status}"
+        except urllib.error.HTTPError as e:
+            last_err = f"{url} 返回 HTTP {e.code}"
+        except Exception as e:
+            last_err = f"{url} 请求失败: {e}"
+    return False, last_err
+
+
+def extract_service_endpoint(exp_dir):
+    """从 ais_bench 落盘的模型配置（<exp_dir>/configs/*.py）解析 host_ip / host_port。
+
+    Returns:
+        (host_ip, host_port)；解析不到返回 (None, None)。
+    """
+    configs_dir = os.path.join(exp_dir, "configs") if exp_dir else None
+    if not configs_dir or not os.path.isdir(configs_dir):
+        return None, None
+    for fname in sorted(os.listdir(configs_dir)):
+        if not fname.endswith(".py"):
+            continue
+        try:
+            with open(os.path.join(configs_dir, fname), encoding="utf-8") as f:
+                content = f.read()
+        except OSError:
+            continue
+        host_ip = host_port = None
+        m = re.search(r"host_ip\s*=\s*['\"]([^'\"]*)['\"]", content)
+        if m:
+            host_ip = m.group(1)
+        m = re.search(r"host_port\s*=\s*(\d+)", content)
+        if m:
+            host_port = int(m.group(1))
+        if host_ip is not None or host_port is not None:
+            return host_ip or "localhost", host_port or 8080
+    return None, None
+
+
+# ---------------------------------------------------------------------------
 # 落盘性能数据解析（与 ais_bench 汇总器计算口径一致）
 # ---------------------------------------------------------------------------
 
@@ -800,6 +872,25 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
     record["_duration_s"] = round(duration, 1)
     record["_ttft_samples"] = final_ttft
     record["_tpot_samples"] = final_tpot
+
+    # ---- 清理被测 vLLM 服务的 KV cache（每轮结束，成功或被中断均执行）----
+    exp_dir = collector.exp_dir
+    if exp_dir is None and result_dir is not None:
+        _parent = os.path.dirname(result_dir)  # result_dir = <exp_dir>/performances/<abbr>
+        if os.path.basename(_parent) == "performances":
+            exp_dir = os.path.dirname(_parent)
+    if exp_dir is not None:
+        host_ip, host_port = extract_service_endpoint(exp_dir)
+        if host_ip is None:
+            print(f"[Round {round_no}] 未从落盘模型配置解析到 host_ip/host_port，跳过 KV cache 清理")
+            record["_kv_cache_cleared"] = False
+        else:
+            cleared, msg = clear_kv_cache(host_ip, host_port)
+            record["_kv_cache_cleared"] = cleared
+            print(f"[Round {round_no}] 清理 KV cache ({host_ip}:{host_port}): "
+                  f"{'成功' if cleared else '失败: ' + msg}")
+    else:
+        record["_kv_cache_cleared"] = False
     return record
 
 

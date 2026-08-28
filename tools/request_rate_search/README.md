@@ -63,9 +63,9 @@ python tools/request_rate_search/request_rate_search.py \
 | `--model-abbr` | str，可选 | 指定监控的模型 abbr；缺省自动取 `performances/` 下最新子目录 |
 | `--shell` | str，默认 `bash` | 执行脚本的 shell |
 
-## 核心逻辑说明（两处可独立改动的函数）
+## 核心逻辑说明（可独立改动的函数）
 
-两个关键逻辑均封装为独立函数，位于 `request_rate_search.py`，可按需独立修改：
+关键逻辑均封装为独立函数，位于 `request_rate_search.py`，可按需独立修改：
 
 ### “要求1” —— `requirement_1(...)`
 
@@ -86,6 +86,14 @@ TTFT/TPOT 计算口径与 ais_bench 汇总器一致：`ttft = tp[1] - tp[0]`，`
 2. 一路失败则按 `descent_factor`（默认 0.5）等比下降，直至 `rate_min`；
 3. 出现通过点后，在通过点与上方最近失败点之间二分细化，区间宽度 ≤ `tol × rate_max` 时收敛；
 4. 若 `rate_max` 已通过，则最优即为 `rate_max`；若一路失败到 `rate_min` 仍不通过，则范围内无可行 rate。
+
+### “清空 KV cache” —— `clear_kv_cache(...)`
+
+每轮 ais_bench 执行结束（成功或被中断）后，自动清空被测 vLLM 服务的 KV cache，保证各轮之间状态独立。
+
+- 依次尝试 vLLM 常见清缓存接口（`/reset_prefix_cache`、`/v1/cache/delete`），任一返回 2xx 即视为成功；全部失败仅打印告警，不中断寻优流程。
+- 服务地址（host_ip / host_port）通过 `extract_service_endpoint(exp_dir)` 从 ais_bench 落盘的模型配置（`<实验目录>/configs/*.py`）自动解析；解析不到则跳过并告警。
+- 如需对接其它服务或其它清缓存方式，直接修改该独立函数即可。
 
 ## 落盘结果定位（工具如何知道结果目录）
 
