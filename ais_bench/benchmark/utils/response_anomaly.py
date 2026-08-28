@@ -453,9 +453,15 @@ class ResponseAnomalyCoordinator:
                 len(inherited),
             )
         if not model_name_warned and not anomaly_cfg.get("model_name"):
+            # ConfigManager normally resolves model_name (explicit value, or
+            # the model_path basename) before the task runs, so this branch
+            # only triggers on manually built configs. The detector receives
+            # None as the model name in that case; warn truthfully instead
+            # of claiming an abbr fallback that never happens.
             self.logger.warning(
-                "response_anomaly.model_name is not set; falling back to model "
-                "abbr '%s'. msProbe model matching may be degraded.",
+                "response_anomaly.model_name is not set; msProbe will be "
+                "called without a model name and model matching may be "
+                "degraded. Set response_anomaly.model_name for model '%s'.",
                 task.model_cfg.get("abbr"),
             )
             model_name_warned = True
@@ -862,6 +868,10 @@ class ResponseAnomalyCoordinator:
             shutil.rmtree(payload.payload_dir)
         if payload.source_dir.exists():
             shutil.rmtree(payload.source_dir)
+        try:
+            payload.source_dir.parent.rmdir()
+        except OSError:
+            pass
         if any(
             "response_anomaly_payload" in prediction
             for prediction in task.predictions
