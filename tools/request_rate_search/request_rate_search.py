@@ -544,20 +544,35 @@ class OutputCollector(threading.Thread):
                     self.expected_total = total
 
 
-def resolve_monitor_dir(collector, args):
-    """根据收集到的日志/目录结构定位本轮落盘性能数据目录（performances/<abbr>/tmp）。"""
+def resolve_monitor_dir(collector, args, min_mtime=0.0):
+    """根据收集到的日志/目录结构定位本轮落盘性能数据目录（performances/<abbr>/tmp）。
+
+    Args:
+        collector: 子进程输出收集器（解析 "Current exp folder" 日志行）
+        args: 命令行参数
+        min_mtime: 本轮开始时间；回退扫描 work-dir 时仅考虑该时间之后新建的目录，
+            避免误用上一轮/历史运行遗留的旧目录（否则会读到旧数据并立刻误判打断）。
+    """
     base = None
     if collector.exp_dir:
         base = collector.exp_dir
     else:
-        # 回退：扫描 --work-dir 下最新时间戳目录
+        # 回退：扫描 --work-dir 下本轮运行期间新建的时间戳目录
+        # （容忍 2s 时间戳精度误差，历史旧目录远早于此，不会被选中）
         if os.path.isdir(args.work_dir):
-            dirs = sorted(
-                d for d in os.listdir(args.work_dir)
-                if os.path.isdir(os.path.join(args.work_dir, d))
-            )
-            if dirs:
-                base = os.path.join(args.work_dir, dirs[-1])
+            candidates = []
+            for d in os.listdir(args.work_dir):
+                full = os.path.join(args.work_dir, d)
+                if not os.path.isdir(full):
+                    continue
+                try:
+                    mtime = os.path.getmtime(full)
+                except OSError:
+                    continue
+                if mtime >= min_mtime - 2.0:
+                    candidates.append((mtime, full))
+            if candidates:
+                base = max(candidates, key=lambda t: t[0])[1]
     if base is None:
         return None
     perf_root = os.path.join(base, "performances")
@@ -727,7 +742,7 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
 
     while True:
         if monitor_dir is None:
-            monitor_dir = resolve_monitor_dir(collector, args)
+            monitor_dir = resolve_monitor_dir(collector, args, min_mtime=start_time)
             if monitor_dir is not None:
                 print(f"[Round {round_no}] monitoring on-disk perf data dir: {monitor_dir}")
                 monitor = PerfMonitor(monitor_dir)
