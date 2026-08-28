@@ -4,7 +4,7 @@
 
 该工具用于对某个 ais_bench 性能测试任务寻找**最优 request rate**：
 
-- **最优的定义**：在满足“要求1”（TTFT / TPOT 的耗时在各自门限约束内）的前提下，Request Throughput 最高。由于吞吐随 request rate 单调递增（直至饱和），等价于**满足要求1的最高 request rate**。
+- **最优的定义**：在满足“要求1”（TTFT / TPOT 的耗时在各自门限约束内、预期成功率不低于门限）的前提下，Request Throughput 最高。由于吞吐随 request rate 单调递增（直至饱和），等价于**满足要求1的最高 request rate**。
 - 工具以子进程方式执行用户提供的 shell 脚本（内含 ais_bench 基准命令），每轮在命令末尾追加 `--request-rate <rate>` 强制指定请求速率。
 - 运行期间实时监控 ais_bench 落盘的性能数据（`performances/<abbr>/tmp/` 下的流式文件），一旦判定不满足“要求1”立即中断本轮（提前打断），继续试探下一个 request rate。
 - 每轮打印关键日志（至少包含请求数与 Request Throughput），全部轮次汇总到一个 CSV，最后打印 CSV 路径。
@@ -52,6 +52,7 @@ python tools/request_rate_search/request_rate_search.py \
 | `--tpot-threshold` | 可重复，必填 | TPOT 门限约束对，格式 `PXX:门限ms`，可重复传入 |
 | `--expected-requests` | int，可选 | 预期总请求数（提前打断判定分母）；缺省自动从任务看板进度解析，解析不到回退为“已完成数”并告警 |
 | `--early-abort-ratio` | float，可选 | 全局允许违反比例；缺省按各百分位推导 `(100-PXX)/100`（P90→0.1，P95→0.05，P99→0.01） |
+| `--success-rate-threshold` | float，可选 | 预期成功率门限（`预期成功率=(总请求数-失败请求数)/总请求数`），如 `0.99`；低于门限即判定不满足；缺省不校验 |
 | `--min-samples` | int，默认 10 | 已完成成功样本数低于该值时不提前打断 |
 | `--monitor-interval` | float，默认 5.0 | 监控轮询间隔（秒） |
 | `--descent-factor` | float，默认 0.5 | 算法1 等比下降因子 |
@@ -68,10 +69,12 @@ python tools/request_rate_search/request_rate_search.py \
 
 ### “要求1” —— `requirement_1(...)`
 
-判断性能数据是否满足门限要求，支持 TTFT 与 TPOT 各自配置**多个（百分位, 门限）约束对**（如 P90、P95 各有门限）。
+判断性能数据是否满足门限要求，支持 TTFT 与 TPOT 各自配置**多个（百分位, 门限）约束对**（如 P90、P95 各有门限），并可选校验**预期成功率**。
 
-- **最终判定**（全部请求完成后）：每个约束对均需满足 `PXX(样本) ≤ 门限`。
-- **运行中提前判定**（请求未跑完时）：对每个约束对统计违反样本数（样本值 > 门限），若 `违反数 / 预期总请求数 > 允许比例`（缺省 `(100-PXX)/100`）即判定不满足并触发打断。已完成样本数不足 `--min-samples` 时不提前打断。
+- **最终判定**（全部请求完成后）：每个约束对均需满足 `PXX(样本) ≤ 门限`；若配置了 `--success-rate-threshold`，还需满足 `预期成功率 = (总请求数 - 失败请求数) / 总请求数 ≥ 门限`。
+- **运行中提前判定**（请求未跑完时）：
+  - 对每个约束对统计违反样本数（样本值 > 门限），若 `违反数 / 预期总请求数 > 允许比例`（缺省 `(100-PXX)/100`）即判定不满足并触发打断。已完成样本数不足 `--min-samples` 时不提前打断。
+  - 失败请求数同样实时累计：一旦 `(总请求数 - 当前失败请求数) / 总请求数 < 成功率门限` 即判定不满足并触发打断（失败数不足 `--min-samples` 时也生效，失败是确定事件）。
 
 TTFT/TPOT 计算口径与 ais_bench 汇总器一致：`ttft = tp[1] - tp[0]`，`tpot = (latency - ttft) / (output_tokens - 1)`（单位换算为 ms）。
 
@@ -90,11 +93,11 @@ TTFT/TPOT 计算口径与 ais_bench 汇总器一致：`ttft = tp[1] - tp[0]`，`
   - `Current exp folder: <work_dir>/<timestamp>`（实验根目录）
   - `Performance Result files located in <performances/<abbr> 目录>`（最终结果目录）
 - 运行中监控 `performances/<abbr>/tmp/` 下的流式落盘数据（`tmp_*.jsonl` + sqlite db）。
-- 正常完成后从最终目录读取 `<dataset>.json`（Request Throughput / Total Requests / Success Requests）与 `<dataset>.csv`（TTFT/TPOT 各 PXX 列）。
+- 正常完成后从最终目录读取 `<dataset>.json`（Request Throughput / Total Requests / Success Requests / Failed Requests）与 `<dataset>.csv`（TTFT/TPOT 各 PXX 列）。
 
 ## 输出说明
 
-- `--output-dir/summary.csv`：每轮一行，列含 `round, request_rate, passed, interrupted, requests_completed, expected_total, request_throughput_req_s, ttft_<PXX>_ms..., tpot_<PXX>_ms..., vratio_TTFT_<PXX>..., vratio_TPOT_<PXX>..., result_dir, log_path, note`。
+- `--output-dir/summary.csv`：每轮一行，列含 `round, request_rate, passed, interrupted, requests_completed, expected_total, failed_requests, expected_success_rate, request_throughput_req_s, ttft_<PXX>_ms..., tpot_<PXX>_ms..., vratio_TTFT_<PXX>..., vratio_TPOT_<PXX>..., result_dir, log_path, note`。
 - `--output-dir/logs/round_<rate>.log`：每轮 ais_bench 完整输出日志。
 - 工具结束时会打印汇总 CSV 的绝对路径，以及最优 request rate 及其 Request Throughput。
 

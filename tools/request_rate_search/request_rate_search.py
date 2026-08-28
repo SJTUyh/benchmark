@@ -105,7 +105,8 @@ def _check_metric(metric_name, samples, limits, expected_total, early_abort_rati
 
 def requirement_1(ttft_ms, tpot_ms, ttft_limits, tpot_limits,
                   expected_total=None, early_abort_ratio=None,
-                  min_samples=10, finished=False):
+                  min_samples=10, finished=False,
+                  failed_requests=0, success_rate_threshold=None):
     """判断性能数据是否满足"要求1"（独立函数，可自由改动）。
 
     Args:
@@ -117,12 +118,32 @@ def requirement_1(ttft_ms, tpot_ms, ttft_limits, tpot_limits,
         early_abort_ratio: 全局允许违反比例；None 时按各百分位推导 (100-PXX)/100
         min_samples: 已完成成功样本数低于该值时不做提前判定（默认 10）
         finished: 是否所有请求已完成（True 走最终判定；False 走运行中提前判定）
+        failed_requests: 当前（或最终）失败的请求数
+        success_rate_threshold: 预期成功率门限；预期成功率 =
+            (总请求数 - 失败请求数) / 总请求数，低于门限即判定不满足；None 不校验
 
     Returns:
         (通过: bool, 原因: str, 统计: {"TTFT": {...}, "TPOT": {...}})
     """
     reasons = []
     details = {}
+
+    # 预期成功率校验：成功率 = (总请求数 - 失败请求数) / 总请求数
+    if success_rate_threshold is not None:
+        total = expected_total if expected_total else (len(ttft_ms) + failed_requests)
+        success_rate = (total - failed_requests) / total if total > 0 else 1.0
+        details["success_rate"] = {
+            "failed": failed_requests,
+            "total": total,
+            "current": success_rate,
+            "threshold": success_rate_threshold,
+        }
+        if success_rate < success_rate_threshold:
+            return False, (
+                f"预期成功率{success_rate:.2%} < 门限{success_rate_threshold:.2%} "
+                f"(失败{failed_requests}/{total})"
+            ), details
+
     for metric_name, samples, limits in (
         ("TTFT", ttft_ms, ttft_limits),
         ("TPOT", tpot_ms, tpot_limits),
@@ -285,7 +306,9 @@ class PerfMonitor:
     def __init__(self, monitor_dir):
         self.monitor_dir = monitor_dir
         self.seen_keys = set()   # 已成功解析的请求 key：(db_name, id, uuid)
+        self.failed_keys = set() # 已统计失败的请求 key
         self.samples = []        # 累积样本 [(ttft_ms, tpot_ms), ...]
+        self.failed_count = 0    # 累积失败请求数
         self.array_cache = {}    # db 路径 -> {rowid: ndarray}
 
     def scan(self):
@@ -311,7 +334,13 @@ class PerfMonitor:
                 except json.JSONDecodeError:
                     continue
                 key = (obj.get("db_name"), obj.get("id"), obj.get("uuid"))
-                if not obj.get("success") or key in self.seen_keys:
+                if not obj.get("success"):
+                    # 失败请求：直接计数（无需 db 解析）
+                    if key not in self.failed_keys:
+                        self.failed_keys.add(key)
+                        self.failed_count += 1
+                    continue
+                if key in self.seen_keys:
                     continue
                 pending.append((key, obj))
                 tp = obj.get("time_points")
@@ -348,11 +377,13 @@ def compute_samples_from_details(perf_dir):
     """从最终落盘的 <dataset>_details.jsonl + db_data/ 重新计算全部 TTFT/TPOT 样本。
 
     与汇总器（summarizer）读取的数据源一致，用于对正常完成轮次的最终判定。
+    返回 (样本列表, 失败请求数)。
     """
-    raw = []          # 待处理请求对象列表
+    raw = []          # 待处理成功请求对象列表
     db_needed = {}    # db_name -> {rowid, ...}
+    failed_count = 0  # 失败请求数
     if not perf_dir or not os.path.isdir(perf_dir):
-        return []
+        return [], 0
     for fname in sorted(os.listdir(perf_dir)):
         if not fname.endswith("_details.jsonl"):
             continue
@@ -364,6 +395,7 @@ def compute_samples_from_details(perf_dir):
                     except json.JSONDecodeError:
                         continue
                     if not obj.get("success"):
+                        failed_count += 1
                         continue
                     raw.append(obj)
                     tp = obj.get("time_points")
@@ -389,7 +421,7 @@ def compute_samples_from_details(perf_dir):
         ttft_tpot = compute_ttft_tpot_from_time_points(tp, obj.get("output_tokens"))
         if ttft_tpot is not None:
             samples.append(ttft_tpot)
-    return samples
+    return samples, failed_count
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +559,7 @@ def read_final_results(result_dir, ttft_limits, tpot_limits):
         "throughput": None,
         "total_requests": None,
         "success_requests": None,
+        "failed_requests": None,
         "ttft_pxx": {},
         "tpot_pxx": {},
     }
@@ -553,6 +586,8 @@ def read_final_results(result_dir, ttft_limits, tpot_limits):
             res["total_requests"] = _get_common(data, "Total Requests")
         if res["success_requests"] is None:
             res["success_requests"] = _get_common(data, "Success Requests")
+        if res["failed_requests"] is None:
+            res["failed_requests"] = _get_common(data, "Failed Requests")
 
     for fname in os.listdir(result_dir):
         if not fname.endswith(".csv"):
@@ -639,6 +674,8 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
                 early_abort_ratio=args.early_abort_ratio,
                 min_samples=args.min_samples,
                 finished=False,
+                failed_requests=monitor.failed_count,
+                success_rate_threshold=args.success_rate_threshold,
             )
             if not ok:
                 print(f"[Round {round_no}] 要求1不满足，打断本轮: {reason}")
@@ -658,7 +695,9 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
     result_dir = collector.result_dir
     if result_dir is None and monitor_dir is not None:
         result_dir = os.path.dirname(monitor_dir)  # 回退：监控目录的上一级
-    details_samples = compute_samples_from_details(result_dir) if result_dir else []
+    details_samples, details_failed = (
+        compute_samples_from_details(result_dir) if result_dir else ([], 0)
+    )
     if details_samples:
         final_ttft = [s[0] for s in details_samples]
         final_tpot = [s[1] for s in details_samples]
@@ -668,6 +707,12 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
     else:
         final_ttft, final_tpot = [], []
 
+    # 最终失败请求数：优先 JSON（Failed Requests），其次落盘 details，最后监控累积
+    final_res = read_final_results(result_dir, ttft_limits, tpot_limits) if result_dir else {}
+    final_failed = final_res.get("failed_requests")
+    if final_failed is None:
+        final_failed = details_failed if details_samples else (monitor.failed_count if monitor else 0)
+
     # ---- 最终要求1判定（打断轮次一律判为不通过）----
     ok, reason, details = requirement_1(
         final_ttft, final_tpot, ttft_limits, tpot_limits,
@@ -675,15 +720,21 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
         early_abort_ratio=args.early_abort_ratio,
         min_samples=args.min_samples,
         finished=True,
+        failed_requests=final_failed,
+        success_rate_threshold=args.success_rate_threshold,
     )
     passed = ok and not interrupted
     if interrupted:
         reason = f"提前打断: {reason}" if reason else "提前打断"
 
     # ---- 汇总数值 ----
-    final_res = read_final_results(result_dir, ttft_limits, tpot_limits) if result_dir else {}
     requests_completed = len(final_ttft)
     throughput = final_res.get("throughput")
+    # 预期成功率（CSV 记录用）
+    success_total = final_res.get("total_requests") or expected_total or (requests_completed + final_failed)
+    expected_success_rate = (
+        round((success_total - final_failed) / success_total, 4) if success_total else ""
+    )
     ttft_pxx_vals, tpot_pxx_vals = {}, {}
     for pxx, _ in ttft_limits:
         v = final_res.get("ttft_pxx", {}).get(pxx)
@@ -711,6 +762,8 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
         f"[Round {round_no}] request_rate={format_rate(rate)}",
         f"requests_completed={requests_completed}",
         f"expected_total={expected_total if expected_total is not None else 'unknown'}",
+        f"failed={final_failed}",
+        f"expected_success_rate={expected_success_rate if expected_success_rate != '' else 'N/A'}",
         f"request_throughput={throughput if throughput is not None else 'N/A'} req/s",
     ]
     summary_parts += [f"ttft_{pxx}={ttft_pxx_vals.get(pxx)}ms" for pxx, _ in ttft_limits]
@@ -729,6 +782,8 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
         "interrupted": "True" if interrupted else "False",
         "requests_completed": requests_completed,
         "expected_total": expected_total if expected_total is not None else "",
+        "failed_requests": final_failed,
+        "expected_success_rate": expected_success_rate,
         "request_throughput_req_s": throughput if throughput is not None else "",
     }
     for pxx, _ in ttft_limits:
@@ -755,7 +810,8 @@ def run_round(round_no, rate, args, ttft_limits, tpot_limits, logs_dir):
 def build_csv_columns(ttft_limits, tpot_limits):
     cols = [
         "round", "request_rate", "passed", "interrupted",
-        "requests_completed", "expected_total", "request_throughput_req_s",
+        "requests_completed", "expected_total", "failed_requests",
+        "expected_success_rate", "request_throughput_req_s",
     ]
     cols += [f"ttft_{pxx}_ms" for pxx, _ in ttft_limits]
     cols += [f"tpot_{pxx}_ms" for pxx, _ in tpot_limits]
@@ -807,6 +863,9 @@ def parse_args():
                         help="预期总请求数（提前打断判定分母）；缺省自动从看板进度解析")
     parser.add_argument("--early-abort-ratio", type=float, default=None,
                         help="全局允许违反比例；缺省按各百分位推导 (100-PXX)/100")
+    parser.add_argument("--success-rate-threshold", type=float, default=None,
+                        help="预期成功率门限（预期成功率=(总请求数-失败请求数)/总请求数），"
+                             "如 0.99；低于门限即判定不满足；缺省不校验")
     parser.add_argument("--min-samples", type=int, default=10,
                         help="已完成样本数低于该值时不提前打断（默认 10）")
     parser.add_argument("--monitor-interval", type=float, default=5.0,
@@ -838,6 +897,8 @@ def parse_args():
         parser.error("--monitor-interval 必须为正数")
     if args.early_abort_ratio is not None and not 0 < args.early_abort_ratio < 1:
         parser.error("--early-abort-ratio 必须在 (0, 1) 之间")
+    if args.success_rate_threshold is not None and not 0 < args.success_rate_threshold <= 1:
+        parser.error("--success-rate-threshold 必须在 (0, 1] 之间")
     return args
 
 
@@ -845,7 +906,9 @@ def main():
     args = parse_args()
     ttft_limits = normalize_limits(args.ttft_threshold)
     tpot_limits = normalize_limits(args.tpot_threshold)
-    print(f"要求1 约束: TTFT={ttft_limits}, TPOT={tpot_limits}")
+    sr = args.success_rate_threshold
+    print(f"要求1 约束: TTFT={ttft_limits}, TPOT={tpot_limits}, "
+          f"预期成功率门限={sr if sr is not None else '未启用'}")
 
     logs_dir = os.path.join(args.output_dir, "logs")
     os.makedirs(logs_dir, exist_ok=True)
