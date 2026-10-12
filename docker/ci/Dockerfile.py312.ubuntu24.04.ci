@@ -22,7 +22,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources && \
     echo "deb https://repo.huaweicloud.com/repository/debian/ bookworm main contrib" > /etc/apt/sources.list && \
     echo "deb https://repo.huaweicloud.com/repository/debian/ bookworm-updates main contrib" >> /etc/apt/sources.list && \
     echo "deb https://repo.huaweicloud.com/repository/debian-security/ bookworm-security main contrib" >> /etc/apt/sources.list && \
-    apt update && apt install -y lsof net-tools && rm -rf /var/lib/apt/lists/*
+    apt update && apt install -y lsof net-tools wget && rm -rf /var/lib/apt/lists/*
 RUN groupadd -g ${APP_GID} ${APP_USER} && \
     useradd -m -u ${APP_UID} -g ${APP_GID} -d ${USER_HOME} -s /bin/bash ${APP_USER} && \
     # 创建工作目录（后续挂载/代码存放）
@@ -44,12 +44,12 @@ WORKDIR ${USER_HOME}/benchmark
 
 # ========== 4. 验证/预安装依赖（可选） ==========
 RUN ARCH=$(uname -m) && \
-    wget -P /tmp https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/benchmark/dependencies/torch-2.12.0%2Bcpu-cp310-cp310-manylinux_2_28_${ARCH}.whl && \
-    python3.10 -m pip install --no-cache-dir /tmp/torch-2.12.0+cpu-cp310-cp310-manylinux_2_28_${ARCH}.whl \
+    wget -P /tmp https://aisbench.obs.cn-north-4.myhuaweicloud.com/images/benchmark/dependencies/torch-2.12.0%2Bcpu-cp311-cp311-manylinux_2_28_${ARCH}.whl && \
+    python3.11 -m pip install --no-cache-dir /tmp/torch-2.12.0+cpu-cp311-cp311-manylinux_2_28_${ARCH}.whl \
     -i https://repo.huaweicloud.com/repository/pypi/simple \
     --trusted-host repo.huaweicloud.com \
     --use-pep517 && \
-    rm /tmp/torch-2.12.0+cpu-cp310-cp310-manylinux_2_28_${ARCH}.whl
+    rm /tmp/torch-2.12.0+cpu-cp311-cp311-manylinux_2_28_${ARCH}.whl
 RUN pip install rouge_chinese --retries 3  -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517
 RUN if [ -f "requirements/runtime.txt" ]; then pip install -r requirements/runtime.txt --retries 3 -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
 RUN if [ -f "requirements/extra.txt" ]; then pip install -r requirements/extra.txt --retries 3  -i https://repo.huaweicloud.com/repository/pypi/simple --trusted-host repo.huaweicloud.com --use-pep517; fi
