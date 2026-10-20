@@ -1,0 +1,178 @@
+[
+  {
+    "rank": 1,
+    "row_id": "03ff7953-4955-4fc5-9ddd-911cab72d7f1",
+    "job_id": "17d1a7f6-3339-4670-8b70-3b145979f57f",
+    "agent": "Codex",
+    "model": "GPT-6 Astra",
+    "effort": "high"
+  },
+  {
+    "rank": 2,
+    "row_id": "17be4c09-ab31-4202-9d56-31a2ccf37e1b",
+    "job_id": "17d1a7f6-3339-4670-8b70-3b145979f57f",
+    "agent": "Codex",
+    "model": "GPT-6 Astra",
+    "effort": "medium"
+  },
+  {
+    "rank": 3,
+    "row_id": "93fc9e32-98c9-4e4a-a6a0-89dd3da598af",
+    "job_id": "17d1a7f6-3339-4670-8b70-3b145979f57f",
+    "agent": "Codex",
+    "model": "GPT-6 Astra",
+    "effort": "low"
+  },
+  {
+    "rank": 3,
+    "row_id": "f8d623c8-5f1b-4f9c-8deb-d110fa91e1d2",
+    "job_id": "17d1a7f6-3339-4670-8b70-3b145979f57f",
+    "agent": "Codex",
+    "model": "GPT-6 Astra",
+    "effort": "max"
+  },
+  {
+    "rank": 5,
+    "row_id": "3d9a7a70-ad72-4197-b895-c73698601637",
+    "job_id": "17d1a7f6-3339-4670-8b70-3b145979f57f",
+    "agent": "Codex",
+    "model": "GPT-6 Astra",
+    "effort": "xhigh"
+  },
+  {
+    "rank": 6,
+    "row_id": "40dbe33d-e8af-475b-8eba-7d5d8f70054c",
+    "job_id": "11efb542-89de-4746-8227-b776c7841a96",
+    "agent": "Claude Code",
+    "model": "Fable 5",
+    "effort": "xhigh"
+  },
+  {
+    "rank": 7,
+    "row_id": "6d091468-3fda-4cbf-ba1c-645b0f522e97",
+    "job_id": "c8fcaaeb-c49a-413a-9f8d-20bc09c53339",
+    "agent": "Codex",
+    "model": "GPT-5.5",
+    "effort": "xhigh"
+  },
+  {
+    "rank": 8,
+    "row_id": "ce0677b9-0fea-46ce-b8de-893c4d68e77a",
+    "job_id": "17f04e4f-1a75-4204-9b75-d042ef0333ec",
+    "agent": "Terminus 2",
+    "model": "Fable 5",
+    "effort": "high"
+  },
+  {
+    "rank": 9,
+    "row_id": "1fe87c62-99ed-477b-9f6c-23ffbabc49f6",
+    "job_id": "da969e44-7659-4c1a-8041-a5dc9e624ee0",
+    "agent": "Cursor CLI",
+    "model": "Grok 4.5",
+    "effort": "high"
+  },
+  {
+    "rank": 10,
+    "row_id": "dcd48d03-9df9-46ab-bc4c-ade6dc35b8da",
+    "job_id": "67e18b19-c047-4e2f-942b-5849801fae52",
+    "agent": "Claude Code",
+    "model": "Opus 4.8",
+    "effort": "high"
+  },
+  {
+    "rank": 11,
+    "row_id": "23ab6a14-4b2d-461d-9171-f8109f5692f1",
+    "job_id": "77fc16b9-8db9-4d61-a172-dba037aba20b",
+    "agent": "Codex",
+    "model": "GPT-5.6 Terra",
+    "effort": "max"
+  },
+  {
+    "rank": 12,
+    "row_id": "db1f499b-d948-43d2-9aaf-27cfe97f6caf",
+    "job_id": "c8fcaaeb-c49a-413a-9f8d-20bc09c53339",
+    "agent": "Terminus 2",
+    "model": "GPT-5.5",
+    "effort": "xhigh"
+  },
+  {
+    "rank": 13,
+    "row_id": "64890377-54de-4cc2-bcd7-e76610983482",
+    "job_id": "1c76cec0-5fbd-491c-b1d9-76021e225d4d",
+    "agent": "mini-SWE-agent",
+    "model": "Muse Spark 1.1",
+    "effort": "xhigh"
+  },
+  {
+    "rank": 14,
+    "row_id": "e5f3feda-4629-46ba-963f-300dcf7c2a4c",
+    "job_id": "413ec154-36fb-46f4-a0b2-2111e1c65501",
+    "agent": "Codex",
+    "model": "GPT-5.6 Luna",
+    "effort": "max"
+  },
+  {
+    "rank": 15,
+    "row_id": "d7540f21-67af-4b3a-ad31-b81b85fef895",
+    "job_id": "84ac1a9d-52a7-491b-85fb-dc323231b67f",
+    "agent": "Claude Code",
+    "model": "Sonnet 5",
+    "effort": "high"
+  },
+  {
+    "rank": 16,
+    "row_id": "b03a8a69-fea8-42dd-a4fb-96a6a39e6857",
+    "job_id": "c8fcaaeb-c49a-413a-9f8d-20bc09c53339",
+    "agent": "Terminus 2",
+    "model": "Gemini 3 Pro",
+    "effort": "high"
+  },
+  {
+    "rank": 17,
+    "row_id": "fdb8393b-5b29-4645-b784-84f52cf31722",
+    "job_id": "c8fcaaeb-c49a-413a-9f8d-20bc09c53339",
+    "agent": "Claude Code",
+    "model": "Opus 4.7",
+    "effort": "max"
+  },
+  {
+    "rank": 18,
+    "row_id": "f867b631-36c8-476e-aa2f-96007ae70da0",
+    "job_id": "c8fcaaeb-c49a-413a-9f8d-20bc09c53339",
+    "agent": "Terminus 2",
+    "model": "Opus 4.7",
+    "effort": "max"
+  },
+  {
+    "rank": 19,
+    "row_id": "660c330f-9cd8-4ce7-8890-3ce573d038a0",
+    "job_id": "5b2904c3-c69a-4ad0-b30f-1d77729389f4",
+    "agent": "Gemini CLI",
+    "model": "Gemini 3 Pro",
+    "effort": "high"
+  },
+  {
+    "rank": 19,
+    "row_id": "1095d399-9d66-44f4-8adc-e11fbb407a68",
+    "job_id": "d5eae728-5413-4143-b52b-34eb170b045d",
+    "agent": "Gemini CLI",
+    "model": "Gemini 3.1 Pro",
+    "effort": "high"
+  },
+  {
+    "rank": 21,
+    "row_id": "360942d9-d27b-4f7e-bcf6-e0ea9cdcdee8",
+    "job_id": "d5eae728-5413-4143-b52b-34eb170b045d",
+    "agent": "Terminus 2",
+    "model": "Gemini 3.1 Pro",
+    "effort": "high"
+  },
+  {
+    "rank": 22,
+    "row_id": "ef2b00eb-f360-41e6-8c97-23c4d762d06b",
+    "job_id": "5b2904c3-c69a-4ad0-b30f-1d77729389f4",
+    "agent": "Claude Code",
+    "model": "GLM-5.1",
+    "effort": "max"
+  }
+]
