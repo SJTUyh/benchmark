@@ -250,6 +250,44 @@ class TestTasksMonitor(unittest.TestCase):
     @patch('ais_bench.benchmark.runners.base.os.path.exists', return_value=False)
     @patch('ais_bench.benchmark.runners.base.os.makedirs')
     @patch('ais_bench.benchmark.runners.base.AISLogger')
+    def test_tasks_monitor_get_task_states_snapshot(self, mock_logger_class, mock_makedirs, mock_exists):
+        """Snapshot combines board rows with the raw tasks_state_map fields."""
+        monitor = TasksMonitor(
+            task_names=self.task_names,
+            output_path=self.output_path,
+            is_debug=True
+        )
+
+        monitor.tasks_state_map["task1"].update({
+            "start_time": 1000.0,
+            "process_id": 12345,
+            "finish_count": 50,
+            "total_count": 100,
+            "progress_description": "infer",
+            "status": "running",
+            "task_log_path": "/tmp/task1.log",
+            "other_kwargs": {"a": 1},
+        })
+
+        snapshot = monitor.get_task_states_snapshot()
+
+        self.assertEqual(len(snapshot), 2)
+        task1 = snapshot[0]
+        self.assertEqual(task1["task_name"], "task1")
+        self.assertEqual(task1["process_id"], 12345)
+        self.assertEqual(task1["status"], "running")
+        self.assertEqual(task1["task_log_path"], "/tmp/task1.log")
+        self.assertIn("50/100", task1["progress"])
+        self.assertEqual(
+            task1["progress_detail"],
+            {"finish_count": 50, "total_count": 100, "description": "infer"},
+        )
+        self.assertEqual(task1["raw"]["start_time"], 1000.0)
+        self.assertEqual(task1["raw"]["other_kwargs"], {"a": 1})
+
+    @patch('ais_bench.benchmark.runners.base.os.path.exists', return_value=False)
+    @patch('ais_bench.benchmark.runners.base.os.makedirs')
+    @patch('ais_bench.benchmark.runners.base.AISLogger')
     def test_tasks_monitor_launch_state_board_debug(self, mock_logger_class, mock_makedirs, mock_exists):
         """Test launch_state_board in debug mode."""
         monitor = TasksMonitor(

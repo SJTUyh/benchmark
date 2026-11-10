@@ -224,6 +224,38 @@ class TasksMonitor:
                     data[-1] = self.task_end_status_list.get(task_name)
         return data
 
+    def get_task_states_snapshot(self) -> List[Dict[str, Any]]:
+        """Structured view of the state board's current data.
+
+        Each item combines the row rendered by the board (task name,
+        process, progress text, time cost, status, log path, extend
+        parameters) with the raw entry kept in ``tasks_state_map``, so
+        external callers can read both the displayed progress and the
+        underlying state fields.
+        """
+        snapshot = []
+        for row in self._get_task_states():
+            task_name, process_id, progress, time_cost, status, log_path, other_kwargs = row
+            raw = dict(self.tasks_state_map.get(task_name, {}))
+            snapshot.append(
+                {
+                    "task_name": task_name,
+                    "process_id": process_id,
+                    "progress": progress,
+                    "progress_detail": {
+                        "finish_count": raw.get("finish_count"),
+                        "total_count": raw.get("total_count"),
+                        "description": raw.get("progress_description"),
+                    },
+                    "time_cost": time_cost,
+                    "status": status,
+                    "task_log_path": log_path,
+                    "other_kwargs": other_kwargs,
+                    "raw": raw,
+                }
+            )
+        return snapshot
+
     def _update_tasks_progress(self):
         pbar = tqdm(total=len(self.tasks_state_map), desc="Monitoring tasks progress")
         while True:

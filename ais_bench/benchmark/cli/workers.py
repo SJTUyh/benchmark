@@ -102,6 +102,7 @@ class Infer(BaseWorker):
             runner_cfg['max_num_workers'] = self.args.max_num_workers
             runner_cfg['max_workers_per_gpu'] = self.args.max_workers_per_gpu
             runner_cfg['debug'] = self.args.debug or cfg.cli_args.debug
+            runner_cfg['monitor_port'] = getattr(self.args, 'monitor_port', 0)
             # 仅多档 sweep 会在配置里写入该键；老命令/自定义 runner 不注入新参数
             if 'sweep_cooldown_s' in cfg:
                 runner_cfg['sweep_cooldown_s'] = cfg['sweep_cooldown_s']
@@ -516,6 +517,7 @@ class Eval(BaseWorker):
             runner_cfg['max_num_workers'] = self.args.max_num_workers
             runner_cfg['max_workers_per_gpu'] = self.args.max_workers_per_gpu
             runner_cfg['debug'] = self.args.debug or cfg.cli_args.debug
+            runner_cfg['monitor_port'] = getattr(self.args, 'monitor_port', 0)
             runner_cfg['task']['dump_details'] = cfg.cli_args.dump_eval_details
             runner_cfg['task']['cal_extract_rate'] = cfg.cli_args.dump_extract_rate
 

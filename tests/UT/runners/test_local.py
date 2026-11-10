@@ -81,6 +81,21 @@ class TestLocalRunner(unittest.TestCase):
         self.assertEqual(runner.max_num_workers, self.max_num_workers)
         self.assertEqual(runner.max_workers_per_gpu, self.max_workers_per_gpu)
         self.assertFalse(runner.keep_tmp_file)
+        self.assertEqual(runner.monitor_port, 0)
+
+    @patch('ais_bench.benchmark.runners.base.AISLogger')
+    def test_init_with_monitor_port(self, mock_logger_class):
+        """测试 monitor_port 参数被正确保存"""
+        mock_logger = MagicMock()
+        mock_logger_class.return_value = mock_logger
+
+        runner = LocalRunner(
+            task=self.task_cfg,
+            debug=self.debug,
+            monitor_port=8788
+        )
+
+        self.assertEqual(runner.monitor_port, 8788)
 
     @patch('ais_bench.benchmark.runners.base.AISLogger')
     def test_init_with_keep_tmp_file(self, mock_logger_class):
