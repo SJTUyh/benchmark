@@ -19,7 +19,6 @@ from ais_bench.benchmark.registry import RUNNERS, TASKS
 from ais_bench.benchmark.utils.core.abbr import task_abbr_from_cfg
 from ais_bench.benchmark.runners.base import TasksMonitor
 from ais_bench.benchmark.runners.base import BaseRunner
-from ais_bench.benchmark.runners.local_monitor import LocalMonitorServer
 from ais_bench.benchmark.utils.logging.error_codes import RUNNER_CODES
 from ais_bench.benchmark.utils.logging.exceptions import ParameterValueError
 
@@ -49,8 +48,6 @@ class LocalRunner(BaseRunner):
             Defaults to 16.
         max_workers_per_gpu (int): Max number of workers to run for one GPU.
             Defaults to 1.
-        monitor_port (int): Port of the read-only task monitor HTTP service.
-            0 disables it. Defaults to 0.
         debug (bool): Whether to run in debug mode.
     """
 
@@ -61,14 +58,12 @@ class LocalRunner(BaseRunner):
                  max_workers_per_gpu: int = 1,
                  keep_tmp_file: bool = False,
                  sweep_cooldown_s: int = 0,
-                 monitor_port: int = 0,
                  **kwargs):
         super().__init__(task=task, debug=debug)
         self.max_num_workers = max_num_workers
         self.max_workers_per_gpu = max_workers_per_gpu
         self.keep_tmp_file = keep_tmp_file
         self.sweep_cooldown_s = sweep_cooldown_s
-        self.monitor_port = monitor_port
         for k, v in kwargs.items():
             self.logger.warning(f'Ignored argument in {self.__module__}: {k}={v}')
 
@@ -85,24 +80,12 @@ class LocalRunner(BaseRunner):
         self.logger.debug(f"LocalRunner.launch called with {len(tasks)} task(s)")
         task_names = [task_abbr_from_cfg(task) for task in tasks]
 
-        def monitor_process(task_names, output_path, is_debug, refresh_interval=0.5, monitor_port=0):
+        def monitor_process(task_names, output_path, is_debug, refresh_interval=0.5):
             tasks_monitor = TasksMonitor(task_names, output_path, is_debug, refresh_interval)
-            server = None
-            if not is_debug and monitor_port:
-                server = LocalMonitorServer(tasks_monitor, port=monitor_port)
-                port = server.start()
-                if port:
-                    tasks_monitor.logger.info(
-                        f"Local task monitor server started at http://127.0.0.1:{port}"
-                    )
-            try:
-                tasks_monitor.launch_state_board()
-            finally:
-                if server is not None:
-                    server.stop()
+            tasks_monitor.launch_state_board()
         monitor_p = multiprocessing.Process(
             target=monitor_process,
-            args=(task_names, tasks[0]['work_dir'], self.debug, 0.5, self.monitor_port)
+            args=(task_names, tasks[0]['work_dir'], self.debug, 0.5)
 
         )
         self.logger.debug(f"Task monitor process started (PID: {monitor_p.pid})")
