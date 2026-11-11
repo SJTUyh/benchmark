@@ -260,6 +260,7 @@ class TestVLLMCustomAPIChat(unittest.TestCase):
         self.assertEqual(output.content, "Hello, world!")
         self.assertEqual(output.reasoning_content, "This is my response.")
         self.assertEqual(output.output_tokens, 5)
+        self.assertIsNone(output.input_tokens)
         
         # 测试多个choices的情况
         multi_choice_response = {

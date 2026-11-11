@@ -23,8 +23,10 @@ def test_output_initialization():
     assert isinstance(output.time_points, list)
     assert output.content == ""
     assert output.reasoning_content == ""
-    assert output.input_tokens == 0
-    assert output.output_tokens == 0
+    assert output.input_tokens is None
+    assert output.output_tokens is None
+    assert output.start_time is None
+    assert output.end_time is None
     assert isinstance(output.extra_perf_data, dict)
     assert isinstance(output.extra_details_data, dict)
     assert output.input is None

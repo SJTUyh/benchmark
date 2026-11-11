@@ -469,6 +469,41 @@ class TestBaseInferencerOutputHandler(unittest.TestCase):
                 except Exception:
                     pass
 
+    def test_run_cache_consumer_failed_result_fields(self):
+        """测试失败记录保留起止时间与 token 字段"""
+        handler = ConcreteOutputHandler(save_every=1)
+        handler.all_success = False
+
+        start_time = "2026-11-11T10:00:00.000+08:00"
+        end_time = "2026-11-11T10:00:01.000+08:00"
+
+        with TempDirectory() as tmpdir:
+            handler.cache_queue.sync_q.put((0, "test", "input1", "output1", "gold1"))
+            handler.cache_queue.sync_q.put(None)
+
+            handler.get_result = mock.Mock(return_value={
+                "success": False,
+                "error_info": "boom",
+                "start_time": start_time,
+                "end_time": end_time,
+                "input_tokens": None,
+                "output_tokens": None,
+            })
+
+            handler.run_cache_consumer(tmpdir, "tmp_test.jsonl", False, save_every=1)
+
+        with TempDirectory() as outdir:
+            handler.write_to_json(outdir, False)
+            failed_path = os.path.join(outdir, "test_failed.jsonl")
+            self.assertTrue(os.path.exists(failed_path))
+            with open(failed_path, "r", encoding="utf-8") as f:
+                failed_data = json.loads(f.readline())
+
+        self.assertEqual(failed_data["start_time"], start_time)
+        self.assertEqual(failed_data["end_time"], end_time)
+        self.assertIsNone(failed_data["input_tokens"])
+        self.assertIsNone(failed_data["output_tokens"])
+
     def test_stop_cache_consumer(self):
         """测试stop_cache_consumer方法向队列发送停止信号"""
         handler = ConcreteOutputHandler()

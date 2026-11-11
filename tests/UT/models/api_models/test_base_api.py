@@ -2,6 +2,7 @@ import sys
 import json
 import asyncio
 import unittest
+from datetime import datetime
 from unittest import mock
 from copy import deepcopy
 import requests
@@ -318,6 +319,12 @@ class TestBaseAPIModel(unittest.TestCase):
             with mock.patch.object(model, "text_infer") as mock_text_infer:
                 await model.generate("test prompt", 100, output, session=mock_session)
                 mock_text_infer.assert_called_once()
+                self.assertIsNotNone(output.start_time)
+                self.assertIsNotNone(output.end_time)
+                self.assertGreaterEqual(
+                    datetime.fromisoformat(output.end_time),
+                    datetime.fromisoformat(output.start_time),
+                )
 
         asyncio.run(run())
 
@@ -338,6 +345,12 @@ class TestBaseAPIModel(unittest.TestCase):
             with mock.patch.object(model, "text_infer", mock_text_infer):
                 await model.generate("test prompt", 100, output, session=mock_session)
                 self.assertEqual(mock_text_infer.call_count, 2)
+                self.assertIsNotNone(output.start_time)
+                self.assertIsNotNone(output.end_time)
+                self.assertGreaterEqual(
+                    datetime.fromisoformat(output.end_time),
+                    datetime.fromisoformat(output.start_time),
+                )
 
         asyncio.run(run())
 

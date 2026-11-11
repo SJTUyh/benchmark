@@ -335,5 +335,44 @@ class TestGenInferencerOutputHandler(unittest.TestCase):
         self.assertNotIn("origin_logprobs", result)
 
 
+    def test_get_prediction_result_with_start_end_time(self):
+        """测试 get_prediction_result 输出 case 起止时间"""
+        handler = GenInferencerOutputHandler(perf_mode=False)
+
+        output = Output()
+        output.success = True
+        output.uuid = "test_uuid"
+        output.start_time = "2026-11-11T10:00:00.000+08:00"
+        output.end_time = "2026-11-11T10:00:01.500+08:00"
+        output.input_tokens = 12
+        output.output_tokens = 3
+        output.get_prediction = mock.Mock(return_value="predicted_text")
+
+        result = handler.get_prediction_result(output, "gold", "input", "data_abbr")
+
+        self.assertEqual(result["start_time"], output.start_time)
+        self.assertEqual(result["end_time"], output.end_time)
+        self.assertEqual(result["input_tokens"], 12)
+        self.assertEqual(result["output_tokens"], 3)
+
+    def test_get_prediction_result_without_usage(self):
+        """测试 usage 缺失时 token 字段保留且为 None"""
+        handler = GenInferencerOutputHandler(perf_mode=False)
+
+        output = Output()
+        output.success = True
+        output.uuid = "test_uuid"
+        output.start_time = "2026-11-11T10:00:00.000+08:00"
+        output.end_time = "2026-11-11T10:00:01.500+08:00"
+        output.get_prediction = mock.Mock(return_value="predicted_text")
+
+        result = handler.get_prediction_result(output, "gold", "input", "data_abbr")
+
+        self.assertIn("input_tokens", result)
+        self.assertIn("output_tokens", result)
+        self.assertIsNone(result["input_tokens"])
+        self.assertIsNone(result["output_tokens"])
+
+
 if __name__ == '__main__':
     unittest.main()

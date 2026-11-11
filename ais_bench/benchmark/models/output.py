@@ -1,7 +1,7 @@
 import os
 import time
 from abc import abstractmethod
-from typing import Union
+from typing import Optional, Union
 
 from PIL import Image
 
@@ -16,8 +16,10 @@ class Output:
         self.time_points: list[float] = []
         self.content: list[str] | str = ""
         self.reasoning_content: list[str] | str = ""
-        self.input_tokens: int = 0
-        self.output_tokens: int = 0
+        self.input_tokens: Optional[int] = None
+        self.output_tokens: Optional[int] = None
+        self.start_time: Optional[str] = None
+        self.end_time: Optional[str] = None
         self.extra_perf_data: dict = {}
         self.extra_details_data: dict = {}
         self.input: list | str = None

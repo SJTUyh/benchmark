@@ -187,9 +187,10 @@ class VLLMCustomAPIChat(BaseAPIModel):
         return request_body
 
     async def _parse_usage(self, json_content: dict, output: Output):
-        if json_content.get("usage"):
-            output.input_tokens = json_content["usage"].get("prompt_tokens", 0)
-            output.output_tokens = json_content["usage"].get("completion_tokens", 0)
+        usage = json_content.get("usage")
+        if isinstance(usage, dict):
+            output.input_tokens = usage.get("prompt_tokens")
+            output.output_tokens = usage.get("completion_tokens")
 
     async def parse_stream_response(self, json_content, output):
         for item in json_content.get("choices", []):

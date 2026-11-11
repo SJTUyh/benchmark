@@ -7,6 +7,7 @@ import os.path as osp
 import ipaddress
 from abc import abstractmethod
 from copy import deepcopy
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Union
 
 import requests
@@ -35,6 +36,11 @@ from ais_bench.benchmark.global_consts import REQUEST_TIME_OUT
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIME_OUT)
 
 PromptType = Union[PromptList, str]
+
+
+def _now_iso() -> str:
+    """Return the current local time as an ISO 8601 string with timezone."""
+    return datetime.now().astimezone().isoformat(timespec="milliseconds")
 
 
 class MockAISLogger(AISLogger):
@@ -434,50 +440,54 @@ class BaseAPIModel(BaseModel):
         session: aiohttp.ClientSession = None,
         **args,
     ):
-        if not session:
-            self.session = aiohttp.ClientSession(
-                trust_env=True, timeout=AIOHTTP_TIMEOUT
-            )
-            close_session = True
-        else:
-            self.session = session
-            close_session = False
-        request_body = await self.get_request_body(
-            input_data, max_out_len, output, **args
-        )
-        self.logger.debug(f"Request body: {request_body}")
-        retry_count = 0
-        for _ in range(self.retry):
-            try:
-                if self.stream:
-                    await self.stream_infer(request_body, output)
-                else:
-                    await self.text_infer(request_body, output)
-                # break retry loop when request is successful
-                break
-            except asyncio.exceptions.CancelledError as e:
-                output.success = False
-                output.error_info = "Request cancelled by user"
-                break
-            except json.JSONDecodeError:
-                break
-            except Exception as e:
-                # increase retry count and set output to failed
-                retry_count += 1
-                output.success = False
-                # Only print the last exception (the actual error), not the full traceback
-                exc_type = type(e).__name__
-                exc_msg = str(e)
-                output.error_info = (
-                    f"After {retry_count} retries, request failed with exception: "
-                    f"{exc_type}: {exc_msg}"
+        output.start_time = _now_iso()
+        try:
+            if not session:
+                self.session = aiohttp.ClientSession(
+                    trust_env=True, timeout=AIOHTTP_TIMEOUT
                 )
-                await output.clear_time_points()
-                continue
-        if close_session:
-            self.logger.debug(f"Waiting for session close ...")
-            await self.session.close()
-        return output
+                close_session = True
+            else:
+                self.session = session
+                close_session = False
+            request_body = await self.get_request_body(
+                input_data, max_out_len, output, **args
+            )
+            self.logger.debug(f"Request body: {request_body}")
+            retry_count = 0
+            for _ in range(self.retry):
+                try:
+                    if self.stream:
+                        await self.stream_infer(request_body, output)
+                    else:
+                        await self.text_infer(request_body, output)
+                    # break retry loop when request is successful
+                    break
+                except asyncio.exceptions.CancelledError as e:
+                    output.success = False
+                    output.error_info = "Request cancelled by user"
+                    break
+                except json.JSONDecodeError:
+                    break
+                except Exception as e:
+                    # increase retry count and set output to failed
+                    retry_count += 1
+                    output.success = False
+                    # Only print the last exception (the actual error), not the full traceback
+                    exc_type = type(e).__name__
+                    exc_msg = str(e)
+                    output.error_info = (
+                        f"After {retry_count} retries, request failed with exception: "
+                        f"{exc_type}: {exc_msg}"
+                    )
+                    await output.clear_time_points()
+                    continue
+            if close_session:
+                self.logger.debug(f"Waiting for session close ...")
+                await self.session.close()
+            return output
+        finally:
+            output.end_time = _now_iso()
 
     async def stream_infer(self, request_body: dict, output: Output):
         await output.record_time_point()
