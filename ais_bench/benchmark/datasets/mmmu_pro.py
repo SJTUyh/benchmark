@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import string
@@ -24,10 +25,11 @@ ANSWER_STR_LEN = 7
 class MMMUProOptions10Dataset(BaseDataset):
 
     @staticmethod
-    def load(path, is_cot=False):
+    def load(path, is_cot=False, image_type="image_path"):
         path = get_data_path(path)
         image_root_path = os.path.join(os.path.dirname(path), "MMMU_Pro_options10_images")
-        logger.info(f"Convert base64 to image and save it in {image_root_path}")
+        if image_type != "image_base64":
+            logger.info(f"Convert base64 to image and save it in {image_root_path}")
         skip_noimg = True
         try:
             data = pd.read_csv(path, sep='\t')
@@ -59,7 +61,23 @@ class MMMUProOptions10Dataset(BaseDataset):
         dataset = []
         for i in sheet_indices:
             line = data.iloc[i]
-            tgt_path = dump_image(line, image_root_path)
+            if image_type == "image_base64":
+                raw_image = line['image'] if 'image' in line else None
+                is_sequence = isinstance(raw_image, (list, tuple, np.ndarray))
+                has_image = raw_image is not None and (
+                    is_sequence or not pd.isna(raw_image)
+                )
+                if has_image:
+                    images = list(raw_image) if is_sequence else [raw_image]
+                    images = [str(img) for img in images]
+                else:
+                    images = []
+                    for image_path in toliststr(line['image_path']):
+                        with open(image_path, 'rb') as f:
+                            images.append(base64.b64encode(f.read()).decode('utf-8'))
+                tgt_path = images
+            else:
+                tgt_path = dump_image(line, image_root_path)
 
             options = {
                 cand: line[cand]

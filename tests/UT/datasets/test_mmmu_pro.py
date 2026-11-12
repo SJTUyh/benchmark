@@ -1,4 +1,7 @@
+import base64
 import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -331,6 +334,33 @@ class TestMMMUProOptions10DatasetLoad(unittest.TestCase):
         ds = MMMUProOptions10Dataset.load("/fake/path.tsv")
         self.assertIsInstance(ds, Dataset)
         self.assertEqual(len(ds), 2)
+
+    def test_load_image_base64(self, mock_path, mock_csv, mock_dump, mock_content, mock_build, mock_split):
+        mock_csv.return_value = self._make_df()
+        ds = MMMUProOptions10Dataset.load("/fake/path.tsv", image_type="image_base64")
+        self.assertEqual(len(ds), 2)
+        mock_dump.assert_not_called()
+        first_msgs = mock_content.call_args_list[0][0][0]
+        image_urls = [item["image_url"] for item in first_msgs if item["type"] == "image_url"]
+        self.assertEqual(image_urls, ["base64data1"])
+
+    def test_load_image_base64_fallback_to_image_path(self, mock_path, mock_csv, mock_dump, mock_content, mock_build, mock_split):
+        df = self._make_df().drop(columns=["image"])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_paths = [os.path.join(tmpdir, "a.png"), os.path.join(tmpdir, "b.png")]
+            payloads = [b"image-a", b"image-b"]
+            for path, payload in zip(image_paths, payloads):
+                with open(path, "wb") as f:
+                    f.write(payload)
+            df["image_path"] = [str([p]) for p in image_paths]
+            mock_csv.return_value = df
+            ds = MMMUProOptions10Dataset.load("/fake/path.tsv", image_type="image_base64")
+
+        self.assertEqual(len(ds), 2)
+        mock_dump.assert_not_called()
+        first_msgs = mock_content.call_args_list[0][0][0]
+        image_urls = [item["image_url"] for item in first_msgs if item["type"] == "image_url"]
+        self.assertEqual(image_urls, [base64.b64encode(payloads[0]).decode("utf-8")])
 
     def test_file_not_found(self, mock_path, mock_csv, mock_dump, mock_content, mock_build, mock_split):
         mock_csv.side_effect = Exception("file not found")
