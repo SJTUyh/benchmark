@@ -27,6 +27,7 @@ AISBench 理论上支持全量Harbor适配的数据集，具体支持的数据�
 | terminal-bench 2.0 | https://github.com/AISBench/terminal-bench-2 | https://modelers.cn/datasets/AISBench/terminal-bench-2-offline-mini | ⚠️执行过程中agent需要访问外网 |
 | terminal-bench 2.1 | https://github.com/AISBench/terminal-bench-2-1 | https://modelers.cn/datasets/AISBench/terminal-bench-2-1-mini | ⚠️执行过程中需要agent访问外网 |
 | DeepSWE | https://github.com/AISBench/deep-swe | https://modelers.cn/datasets/AISBench/DeepSWE-mini | NA |
+| AutomationBench v1.0.6 | [ZIP](https://aisbench.obs.cn-north-4.myhuaweicloud.com/datasets/harbor_adapt_datasets/automationbench-v1.0.6-offline.zip) · [SHA256](https://aisbench.obs.cn-north-4.myhuaweicloud.com/datasets/harbor_adapt_datasets/automationbench-v1.0.6-offline.zip.sha256) | NA | 六领域各100题，共600题，不含simple；含manifest及运行构建上下文，不含已构建镜像。下载需访问OBS，完全断网时预先转移。 |
 
 ### 2. 数据集对应镜像准备
 agent数据集的测评每一个case都有对应的镜像，这些镜像名称在数据集中定义，如果在x86_64服务器上，网络条件良好且能够访问外网，执行过程中会自动拉取并构建对应的镜像。但是这个过程往往比较漫长。
@@ -129,6 +130,8 @@ cd {工作路径}
 👉 更多agent runtime 镜像构建以及一键部署脚本的说明请参考 [一键部署脚本说明](https://github.com/AISBench/benchmark/blob/master/docker/agent_runtime/USAGE.md)
 
 ## agent测评快速入门（两种方式任选其一）
+
+AutomationBench 使用独立示例 `ais_bench/configs/agent_example/harbor_automationbench_task.py` 及配套 Harbor 适配包。使用资源表中的 SHA256 文件校验压缩包后解压，将配置路径占位值替换为包含 `manifest.json` 的实际目录；替换 `api_key` 或使用 `--api-key` 覆盖。`sampling_args=None` 保留官方 scaffold 默认值，工具集及轮数预算由数据集决定。AISBench 复用既有 reward 汇总，保留 Job/Trial 原始产物供离线检查。
 
 | ⭐ 推荐：使用命令行参数 | 备选：使用自定义配置文件 |
 | :--- | :--- |
