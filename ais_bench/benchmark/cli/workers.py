@@ -176,7 +176,11 @@ class Infer(BaseWorker):
 
         spec_ctx = self._spec_decode_before_snapshot(cfg)
 
-        if cfg.get('response_anomaly', {}).get('enabled', False):
+        anomaly_cfg = cfg.get('response_anomaly') or {}
+        msprobe_enabled = bool(anomaly_cfg.get('enabled', False)) and (
+            anomaly_cfg.get('mode', 'msprobe') == 'msprobe'
+        )
+        if msprobe_enabled:
             # Remove a stale status left by a previous interrupted run so the
             # inference board does not wait on an outdated ResponseAnomaly state.
             stale_status = osp.join(
@@ -199,7 +203,7 @@ class Infer(BaseWorker):
 
         self._spec_decode_finalize(cfg, spec_ctx)
 
-        if cfg.get('response_anomaly', {}).get('enabled', False):
+        if msprobe_enabled:
             logger.info(
                 "Inference finished; starting response anomaly detection "
                 "(bound to the inference stage)..."

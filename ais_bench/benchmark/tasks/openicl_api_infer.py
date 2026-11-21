@@ -504,6 +504,9 @@ class OpenICLApiInferTask(BaseTask):
         )
         message_shms = {}
         # Message queue collecting per-process request state; polled periodically
+        online_badcase_enabled = bool(
+            (self.model_cfg.get('generation_kwargs') or {}).get('online_badcase')
+        )
 
         try:
             processes = []
@@ -519,6 +522,7 @@ class OpenICLApiInferTask(BaseTask):
                     self.debug,
                     self.pressure,
                     self.pressure_time,
+                    online_badcase_enabled=online_badcase_enabled,
                 )
                 # Start display progress
                 pb_thread = threading.Thread(
@@ -559,6 +563,7 @@ class OpenICLApiInferTask(BaseTask):
                     self.debug,
                     self.pressure,
                     self.pressure_time,
+                    online_badcase_enabled=online_badcase_enabled,
                 )
                 # Start display progress
                 pb_thread = threading.Thread(

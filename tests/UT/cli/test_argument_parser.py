@@ -88,6 +88,37 @@ class TestArgumentParser(unittest.TestCase):
         self.assertEqual(args.config, 'configs/test_config.py')
 
     @patch('ais_bench.benchmark.cli.argument_parser.get_current_time_str')
+    def test_parse_args_response_anomaly_legacy_config_order(
+        self, mock_get_current_time_str
+    ):
+        """旧用法 `--response-anomaly <config>` 仍按裸开关 + 配置文件解析。"""
+        mock_get_current_time_str.return_value = "20230516_144254"
+        sys.argv = ['benchmark.py', '--response-anomaly', 'configs/test_config.py']
+
+        args = ArgumentParser().parse_args()
+
+        self.assertEqual(args.response_anomaly, 'msprobe')
+        self.assertEqual(args.config, 'configs/test_config.py')
+
+    @patch('ais_bench.benchmark.cli.argument_parser.get_current_time_str')
+    def test_parse_args_response_anomaly_online_mode(
+        self, mock_get_current_time_str
+    ):
+        """`--response-anomaly online` 解析为 online 模式。"""
+        mock_get_current_time_str.return_value = "20230516_144254"
+        sys.argv = [
+            'benchmark.py',
+            'configs/test_config.py',
+            '--response-anomaly',
+            'online',
+        ]
+
+        args = ArgumentParser().parse_args()
+
+        self.assertEqual(args.response_anomaly, 'online')
+        self.assertEqual(args.config, 'configs/test_config.py')
+
+    @patch('ais_bench.benchmark.cli.argument_parser.get_current_time_str')
     def test_parse_args_single_sweep_value_unwrapped(
         self, mock_get_current_time_str
     ):

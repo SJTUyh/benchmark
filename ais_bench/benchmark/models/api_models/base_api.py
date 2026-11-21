@@ -31,6 +31,7 @@ from ais_bench.benchmark.openicl.icl_inferencer.output_handler.ppl_inferencer_ou
 )
 from ais_bench.benchmark.utils.logging.error_codes import ICLI_CODES
 from ais_bench.benchmark.global_consts import REQUEST_TIME_OUT
+from ais_bench.benchmark.utils.online_badcase import OnlineBadcaseDetector
 
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIME_OUT)
@@ -116,6 +117,12 @@ class BaseAPIModel(BaseModel):
         # Popped here so it never reaches the service request body.
         self.response_anomaly_enabled = bool(
             self.generation_kwargs.pop('response_anomaly_enabled', False)
+        )
+        # Injected by ConfigManager when online badcase detection is enabled.
+        # Popped here so it never reaches the service request body.
+        online_badcase_cfg = self.generation_kwargs.pop('online_badcase', None)
+        self.online_badcase_cfg = (
+            online_badcase_cfg if isinstance(online_badcase_cfg, dict) else None
         )
         self.verbose = verbose
         self.session = None
@@ -456,11 +463,27 @@ class BaseAPIModel(BaseModel):
             self.logger.debug(f"Request body: {request_body}")
             retry_count = 0
             for _ in range(self.retry):
+                # A fresh detector per attempt so a retried request does not
+                # inherit the repetition state of the previous attempt.
+                detector = self._new_online_badcase_detector(max_out_len)
                 try:
+                    # Only pass the extra kwarg when detection is enabled so
+                    # third-party subclasses overriding these methods with the
+                    # old signature keep working unchanged.
                     if self.stream:
-                        await self.stream_infer(request_body, output)
+                        if detector is None:
+                            await self.stream_infer(request_body, output)
+                        else:
+                            await self.stream_infer(
+                                request_body, output, detector=detector
+                            )
                     else:
-                        await self.text_infer(request_body, output)
+                        if detector is None:
+                            await self.text_infer(request_body, output)
+                        else:
+                            await self.text_infer(
+                                request_body, output, detector=detector
+                            )
                     # break retry loop when request is successful
                     break
                 except asyncio.exceptions.CancelledError as e:
@@ -489,8 +512,37 @@ class BaseAPIModel(BaseModel):
         finally:
             output.end_time = _now_iso()
 
-    async def stream_infer(self, request_body: dict, output: Output):
+    def _new_online_badcase_detector(self, max_out_len: int):
+        """Build a detector when online badcase detection is enabled."""
+        if not self.online_badcase_cfg:
+            return None
+        return OnlineBadcaseDetector(self.online_badcase_cfg, max_out_len)
+
+    @staticmethod
+    def _consume_stream_delta(output: Output, seen_content: int, seen_reasoning: int):
+        """Return (content_len, reasoning_len, delta) of newly generated text."""
+        delta = ""
+        if isinstance(output.content, str):
+            if len(output.content) >= seen_content:
+                delta = output.content[seen_content:]
+            seen_content = len(output.content)
+        if isinstance(output.reasoning_content, str):
+            if len(output.reasoning_content) >= seen_reasoning:
+                delta = output.reasoning_content[seen_reasoning:] + delta
+            seen_reasoning = len(output.reasoning_content)
+        return seen_content, seen_reasoning, delta
+
+    async def stream_infer(self, request_body: dict, output: Output, detector=None):
         await output.record_time_point()
+        # Start from whatever the output already holds so a retried attempt
+        # does not feed previously generated text to the new detector.
+        seen_content = len(output.content) if isinstance(output.content, str) else 0
+        seen_reasoning = (
+            len(output.reasoning_content)
+            if isinstance(output.reasoning_content, str)
+            else 0
+        )
+        aborted = False
         async with self.session.post(
             url=self.url, json=request_body, headers=self.headers
         ) as response:
@@ -517,12 +569,34 @@ class BaseAPIModel(BaseModel):
                         )
                     await self.parse_stream_response(data, output)
                     self._accumulate_response_anomaly_payload(data, output)
-                output.success = True
+                    if detector is not None and isinstance(output.content, str):
+                        seen_content, seen_reasoning, delta = (
+                            self._consume_stream_delta(
+                                output, seen_content, seen_reasoning
+                            )
+                        )
+                        badcase = detector.feed(delta)
+                        if badcase is not None:
+                            output.extra_details_data["online_badcase"] = badcase
+                            if detector.abort_enabled and not output.perf_mode:
+                                badcase["aborted"] = True
+                                output.success = False
+                                output.error_info = (
+                                    "online badcase aborted: "
+                                    f"{badcase.get('reason')}"
+                                )
+                                aborted = True
+                                break
+                if not aborted:
+                    output.success = True
+                    final = detector.finish(output.output_tokens) if detector is not None else None
+                    if final is not None:
+                        output.extra_details_data["online_badcase"] = final
             else:
                 output.error_info = response.reason
                 output.success = False
 
-    async def text_infer(self, request_body, output: Output):
+    async def text_infer(self, request_body, output: Output, detector=None):
         await output.record_time_point()
         async with self.session.post(
             url=self.url, json=request_body, headers=self.headers
@@ -542,6 +616,15 @@ class BaseAPIModel(BaseModel):
                 await self.parse_text_response(data, output)
                 self._record_response_anomaly_payload(data, output)
                 output.success = True
+                if detector is not None and isinstance(output.content, str):
+                    text = output.content
+                    if isinstance(output.reasoning_content, str):
+                        text = output.reasoning_content + text
+                    badcase = detector.feed(text)
+                    final = detector.finish(output.output_tokens)
+                    badcase = final or badcase
+                    if badcase is not None:
+                        output.extra_details_data["online_badcase"] = badcase
             else:
                 output.error_info = response.reason
                 output.success = False

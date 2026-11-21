@@ -108,10 +108,23 @@ class BaseApiInferencer(BaseInferencer):
             failed_req = self.status_counter.failed_req
             finish_req = self.status_counter.finish_req
             finish_case_req = self.status_counter.case_finish_req
+            badcase_req = self.status_counter.badcase_req
+            wasted_chars = self.status_counter.wasted_chars
+            wasted_ms = int(self.status_counter.wasted_ms)
 
             # Pack -> bytes, then write back to corresponding slice of shared memory
-            packed = struct.pack("5I", post_req, get_req, failed_req, finish_req, finish_case_req)
-            # Write to 16 bytes starting from offset=4 (4 unsigned ints)
+            packed = struct.pack(
+                "8I",
+                post_req,
+                get_req,
+                failed_req,
+                finish_req,
+                finish_case_req,
+                badcase_req,
+                wasted_chars,
+                wasted_ms,
+            )
+            # Write to 32 bytes starting from POST offset (8 unsigned ints)
             flag = struct.unpack_from("I", message_buf[MESSAGE_INFO.STATUS[0]:MESSAGE_INFO.STATUS[1]])[0]
             if flag == 1 or stop_event.is_set():
                 break
@@ -123,7 +136,20 @@ class BaseApiInferencer(BaseInferencer):
             failed_req = self.status_counter.failed_req
             finish_req = self.status_counter.finish_req
             finish_case_req = self.status_counter.case_finish_req
-            packed = struct.pack("5I", post_req, get_req, failed_req, finish_req, finish_case_req)
+            badcase_req = self.status_counter.badcase_req
+            wasted_chars = self.status_counter.wasted_chars
+            wasted_ms = int(self.status_counter.wasted_ms)
+            packed = struct.pack(
+                "8I",
+                post_req,
+                get_req,
+                failed_req,
+                finish_req,
+                finish_case_req,
+                badcase_req,
+                wasted_chars,
+                wasted_ms,
+            )
             message_buf[MESSAGE_INFO.POST[0]:MESSAGE_INFO.POST[0] + len(packed)] = packed
         except Exception as e:
             self.logger.debug(f"Failed to update status counter: {str(e)}")
@@ -671,6 +697,11 @@ class StatusCounter(threading.Thread):
         self.failed_req = 0
         self.finish_req = 0
         self.case_finish_req = 0
+        # Online badcase counters: detected requests, repeatedly generated
+        # characters, and the estimated time wasted on them.
+        self.badcase_req = 0
+        self.wasted_chars = 0
+        self.wasted_ms = 0.0
         # Use thread-safe standard library queue with capacity equal to batch_size * 5
         self.status_queue = None
         if batch_size > 0:
@@ -709,6 +740,12 @@ class StatusCounter(threading.Thread):
             return
         self.status_queue.put_nowait("case_finish_req")
 
+    async def badcase(self, chars: int = 0, wasted_ms: float = 0.0):
+        """Record an online-badcase hit and the resources it wasted."""
+        if not self.status_queue:
+            return
+        self.status_queue.put_nowait(("badcase", int(chars), float(wasted_ms)))
+
     def stop(self):
         """Request thread to stop (called by main thread/coroutine)."""
         self._stop_event.set()
@@ -728,16 +765,7 @@ class StatusCounter(threading.Thread):
                 status = None
 
             if status is not None:
-                if status == "post_req":
-                    self.post_req += 1
-                elif status == "get_req":
-                    self.get_req += 1
-                elif status == "failed_req":
-                    self.failed_req += 1
-                elif status == "finish_req":
-                    self.finish_req += 1
-                elif status == "case_finish_req":
-                    self.case_finish_req += 1
+                self._apply_status(status)
 
         # After stop request, try to consume remaining items in queue and update statistics (optional)
         while True:
@@ -745,20 +773,29 @@ class StatusCounter(threading.Thread):
                 status = self.status_queue.get_nowait()
             except std_queue.Empty:
                 break
-            if status == "post_req":
-                self.post_req += 1
-            elif status == "get_req":
-                self.get_req += 1
-            elif status == "failed_req":
-                self.failed_req += 1
-            elif status == "finish_req":
-                self.finish_req += 1
-            elif status == "case_finish_req":
-                self.case_finish_req += 1
+            self._apply_status(status)
         self.logger.debug("Status counter stopped. "
                           f"Process {os.getpid()} finished with status: "
                           f"{self.post_req} post requests "
                           f"{self.get_req} get requests "
                           f"{self.failed_req} failed requests "
                           f"{self.finish_req} finish requests "
-                          f"{self.case_finish_req} case finish requests")
+                          f"{self.case_finish_req} case finish requests "
+                          f"{self.badcase_req} badcase requests")
+
+    def _apply_status(self, status):
+        """Apply one queued event to the counters."""
+        if isinstance(status, tuple) and status and status[0] == "badcase":
+            self.badcase_req += 1
+            self.wasted_chars += int(status[1])
+            self.wasted_ms += float(status[2])
+        elif status == "post_req":
+            self.post_req += 1
+        elif status == "get_req":
+            self.get_req += 1
+        elif status == "failed_req":
+            self.failed_req += 1
+        elif status == "finish_req":
+            self.finish_req += 1
+        elif status == "case_finish_req":
+            self.case_finish_req += 1

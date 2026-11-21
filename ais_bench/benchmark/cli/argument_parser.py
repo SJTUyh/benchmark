@@ -42,6 +42,7 @@ class ArgumentParser():
         args = self.parser.parse_args()
         if args.mode == 'agentx_raw':
             self._validate_agentx_raw_args(args)
+        self._restore_legacy_response_anomaly(args)
         # --batch-size / --num-prompts 使用 nargs='+'，单个取值也会变成列表。
         # 这里统一解包，保证单值场景下 args 与落盘 cli_args 的类型和旧版一致；
         # 多值（多档 sweep）仍保留列表。
@@ -71,6 +72,25 @@ class ArgumentParser():
                 '--agentx-extra-arg, plus AISBench lifecycle options --work-dir/--reuse/'
                 '--dry-run/--debug/--summarizer/--search; remove: ' + ' '.join(rejected)
             )
+
+    def _restore_legacy_response_anomaly(self, args) -> None:
+        """Keep the legacy `--response-anomaly <config>` ordering working.
+
+        ``--response-anomaly`` now takes an optional mode, so argparse may
+        greedily consume a following positional config path. When the consumed
+        value is not a valid mode and no config was parsed, restore the legacy
+        meaning: bare flag plus that token as the config path.
+        """
+        raw = getattr(args, "response_anomaly", False)
+        if not isinstance(raw, str) or raw in ("msprobe", "online"):
+            return
+        if getattr(args, "config", None) is not None:
+            self.parser.error(
+                "argument --response-anomaly: invalid choice: "
+                f"{raw!r} (choose from 'msprobe', 'online')"
+            )
+        args.config = raw
+        args.response_anomaly = "msprobe"
 
     def _base_parser(self):
         """These args are all for the base configuration."""
@@ -188,13 +208,15 @@ class ArgumentParser():
         )
         parser.add_argument(
             '--response-anomaly',
-            action='store_true',
+            nargs='?',
+            const='msprobe',
             default=False,
-            help='Enable msProbe response anomaly detection. This command-line '
-            'switch is the only way to enable the feature; detection is disabled '
-            'when the flag is absent (response_anomaly.enabled in the config '
-            'file is not supported and is ignored). '
-            'Only supported in all/infer/infer_judge modes; perf and Agent modes are unsupported.'
+            help='Enable response anomaly detection. Bare flag = msprobe (offline '
+            'audit); "online" = lightweight in-flight repetition/loop detection '
+            '(no logprobs). Detection is disabled when the flag is absent '
+            '(response_anomaly.enabled in the config file is not supported and '
+            'is ignored). msprobe only supports all/infer/infer_judge modes; '
+            'online also supports perf/perf_viz/pressure but not Agent modes.'
         )
         parser.add_argument(
             '--response-anomaly-payload-retention',

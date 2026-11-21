@@ -172,6 +172,40 @@ ais_bench --models vllm_api_general_chat --datasets demo_gsm8k_gen_4_shot_cot_ch
 
 ---
 
+## 在线 badcase 检测（`--response-anomaly online`）
+
+`--response-anomaly online` 开启运行期、文本级、零 logprobs 依赖的重复/循环检测，用于尽早识别会浪费测评时间的退化输出。
+
+- **不跑 msProbe**：不注入 `logprobs` / `top_logprobs`，不校验或生成 msProbe 资源，不产生 payload。
+- **支持模式**：`all`、`infer`、`infer_judge`、`perf`、`perf_viz`、`pressure`；仅支持 `attr="service"` 的 API 模型。
+- **处理策略**：
+  - 流式命中 → 关闭连接中止生成，Case 记为失败（`success=False`），已生成文本与打标信息保留；
+  - 非流式无法中止 → 结束后只打标；
+  - `perf` / `pressure` 只打标计数、不早停，避免影响吞吐/时延指标。
+
+### 阈值配置
+
+在配置文件的 `response_anomaly.online` 中覆盖默认值：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `min_chars` | 200 | 触发所需最小生成长度 |
+| `window_chars` | 400 | 尾部检测窗口 |
+| `check_interval_chars` | 32 | 检查步长 |
+| `min_period` / `max_period` | 1 / 32 | 短周期范围 |
+| `min_repeats` | 4 | 最少连续重复次数 |
+| `min_repeated_chars` | 120 | 重复片段最小长度 |
+| `long_segment_chars` | 160 | 长段重复比较长度 |
+| `abort` | true | 是否允许流式早停 |
+
+### 结果与实时播报
+
+- 精度模式：命中信息写入 `predictions/<模型>/<数据集>.jsonl`（失败 Case 写入 `_failed.jsonl`）的 `online_badcase` 字段，含 `reason`、`period`、`detected_at_chars`、`total_chars`、`repeat_chars`、`wasted_ms`、`aborted`、`max_out_len_hit`。
+- 性能模式：`online_badcase` 随 `extra_details_data` 出现在 `<数据集>_details.jsonl`。
+- 运行期计数：终端进度条显示 `BADCASE=`；通过 `--monitor-port <port>` 开启监控服务时，`GET /api/tasks` 的 `other_kwargs` 包含 `BADCASE`、`WASTED_CHARS`、`WASTED_MS`（未开启时这些键不出现）。
+
+---
+
 ## 断点续跑
 
 使用 `--reuse` 时，已有检测结果按 Case 的 `id` + `uuid` 双键匹配继承（`uuid` 变化说明该 Case 已重新推理，不会错挂旧结果）：

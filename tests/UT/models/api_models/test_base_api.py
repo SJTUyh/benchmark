@@ -9,7 +9,8 @@ import requests
 
 from ais_bench.benchmark.models import BaseAPIModel, APITemplateParser
 from ais_bench.benchmark.utils.prompt import PromptList
-from ais_bench.benchmark.models.output import Output
+from ais_bench.benchmark.models.output import Output, RequestOutput
+from ais_bench.benchmark.utils.online_badcase import OnlineBadcaseDetector
 from ais_bench.benchmark.utils.logging.exceptions import (
     AISBenchTypeError,
     AISBenchValueError,
@@ -48,9 +49,11 @@ class TestBaseAPIModel(unittest.TestCase):
 
             async def parse_text_response(self, data, output):
                 output.text = data.get("response", "")
+                output.content = data.get("response", "")
 
             async def parse_stream_response(self, data, output):
                 output.text += data.get("chunk", "")
+                output.content += data.get("chunk", "")
 
         self.model_class = ConcreteAPIModel
         self.default_kwargs = {
@@ -305,6 +308,116 @@ class TestBaseAPIModel(unittest.TestCase):
                 await model.stream_infer({"prompt": "test"}, output)
 
         asyncio.run(run())
+
+    @staticmethod
+    def _badcase_detector(**overrides):
+        config = {
+            "min_chars": 10,
+            "check_interval_chars": 1,
+            "window_chars": 50,
+            "min_period": 3,
+            "max_period": 3,
+            "min_repeats": 5,
+            "min_repeated_chars": 15,
+            "long_segment_chars": 20,
+        }
+        config.update(overrides)
+        return OnlineBadcaseDetector(config)
+
+    @mock.patch("aiohttp.ClientSession.post")
+    def test_stream_infer_online_badcase_aborts(self, mock_post):
+        """流式命中重复后中止连接、标记失败并保留打标信息。"""
+
+        async def mock_content():
+            for _ in range(20):
+                yield b'data: {"chunk": "abc"}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        mock_response = mock.AsyncMock()
+        mock_response.status = 200
+        mock_response.content.__aiter__.return_value = mock_content()
+        mock_post.return_value.__aenter__.return_value = mock_response
+
+        model = self.model_class(**self.default_kwargs)
+        model.stream = True
+        model.session = mock.AsyncMock()
+        output = Output()
+
+        async def run():
+            await model.stream_infer(
+                {"prompt": "test"}, output, detector=self._badcase_detector()
+            )
+
+        asyncio.run(run())
+
+        self.assertFalse(output.success)
+        self.assertIn("aborted", output.error_info)
+        badcase = output.extra_details_data["online_badcase"]
+        self.assertTrue(badcase["aborted"])
+        self.assertEqual(badcase["reason"], "short_cycle")
+
+    @mock.patch("aiohttp.ClientSession.post")
+    def test_stream_infer_online_badcase_perf_mode_does_not_abort(self, mock_post):
+        """perf 模式只打标计数，不中止生成。"""
+
+        async def mock_content():
+            for _ in range(20):
+                yield b'data: {"chunk": "abc"}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        mock_response = mock.AsyncMock()
+        mock_response.status = 200
+        mock_response.content.__aiter__.return_value = mock_content()
+        mock_post.return_value.__aenter__.return_value = mock_response
+
+        model = self.model_class(**self.default_kwargs)
+        model.stream = True
+        model.session = mock.AsyncMock()
+        output = RequestOutput(perf_mode=True)
+
+        async def run():
+            await model.stream_infer(
+                {"prompt": "test"}, output, detector=self._badcase_detector()
+            )
+
+        asyncio.run(run())
+
+        self.assertTrue(output.success)
+        badcase = output.extra_details_data["online_badcase"]
+        self.assertFalse(badcase["aborted"])
+
+    @mock.patch("aiohttp.ClientSession.post")
+    def test_text_infer_online_badcase_tags_without_abort(self, mock_post):
+        """非流式无法中止，只在结束后打标且不改变成功状态。"""
+        mock_response = mock.AsyncMock()
+        mock_response.status = 200
+        mock_response.text.return_value = json.dumps({"response": "abc" * 20})
+        mock_post.return_value.__aenter__.return_value = mock_response
+
+        model = self.model_class(**self.default_kwargs)
+        model.session = mock.AsyncMock()
+        output = Output()
+
+        async def run():
+            await model.text_infer(
+                {"prompt": "test"}, output, detector=self._badcase_detector()
+            )
+
+        asyncio.run(run())
+
+        self.assertTrue(output.success)
+        badcase = output.extra_details_data["online_badcase"]
+        self.assertFalse(badcase["aborted"])
+
+    def test_init_pops_online_badcase_config(self):
+        """检测参数必须从 generation_kwargs 中移除，避免进入请求体。"""
+        kwargs = self.default_kwargs.copy()
+        kwargs["generation_kwargs"] = {"online_badcase": {"min_chars": 10}}
+        model = self.model_class(**kwargs)
+
+        self.assertEqual(model.online_badcase_cfg, {"min_chars": 10})
+        self.assertNotIn("online_badcase", model.generation_kwargs)
+        self.assertIsNotNone(model._new_online_badcase_detector(100))
 
     @mock.patch("aiohttp.ClientSession")
     def test_generate_with_session(self, mock_session_class):

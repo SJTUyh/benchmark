@@ -12,7 +12,7 @@ from ais_bench.benchmark.openicl.icl_inferencer.icl_base_api_inferencer import (
     StatusCounter,
     DEFAULT_SAVE_EVERY_FACTOR,
 )
-from ais_bench.benchmark.utils.config.message_constants import MESSAGE_TYPE_NUM
+from ais_bench.benchmark.utils.config.message_constants import MESSAGE_TYPE_NUM, MESSAGE_SIZE
 from ais_bench.benchmark.utils.logging.exceptions import AISBenchImplementationError, ParameterValueError
 from ais_bench.benchmark.tasks.utils import MESSAGE_INFO
 
@@ -253,7 +253,7 @@ class TestBaseApiInferencer(unittest.TestCase):
         m_build.return_value = DummyModel()
         inf = ConcreteApiInferencer(model_cfg={}, batch_size=10)
 
-        message_shm = shared_memory.SharedMemory(create=True, size=32)
+        message_shm = shared_memory.SharedMemory(create=True, size=MESSAGE_SIZE)
         stop_event = threading.Event()
 
         try:
@@ -261,6 +261,10 @@ class TestBaseApiInferencer(unittest.TestCase):
             inf.status_counter.get_req = 2
             inf.status_counter.failed_req = 3
             inf.status_counter.finish_req = 4
+            inf.status_counter.case_finish_req = 5
+            inf.status_counter.badcase_req = 6
+            inf.status_counter.wasted_chars = 7
+            inf.status_counter.wasted_ms = 8.9
 
             thread = threading.Thread(
                 target=inf._monitor_status_thread,
@@ -275,11 +279,15 @@ class TestBaseApiInferencer(unittest.TestCase):
             thread.join(timeout=1)
 
             message_buf = message_shm.buf
-            values = struct.unpack_from("<4I", message_buf, 4)
+            values = struct.unpack_from("<8I", message_buf, 4)
             self.assertEqual(values[0], 1)
             self.assertEqual(values[1], 2)
             self.assertEqual(values[2], 3)
             self.assertEqual(values[3], 4)
+            self.assertEqual(values[4], 5)
+            self.assertEqual(values[5], 6)
+            self.assertEqual(values[6], 7)
+            self.assertEqual(values[7], 8)
         finally:
             message_shm.close()
             message_shm.unlink()
@@ -319,7 +327,7 @@ class TestBaseApiInferencer(unittest.TestCase):
         m_build.return_value = DummyModel()
         inf = ConcreteApiInferencer(model_cfg={}, batch_size=10)
 
-        message_shm = shared_memory.SharedMemory(create=True, size=32)
+        message_shm = shared_memory.SharedMemory(create=True, size=MESSAGE_SIZE)
         stop_event = threading.Event()
 
         try:
@@ -328,7 +336,7 @@ class TestBaseApiInferencer(unittest.TestCase):
             call_count = [0]
             def failing_pack(fmt, *args):
                 call_count[0] += 1
-                if call_count[0] == 2 and fmt == "<4I":
+                if call_count[0] == 2 and fmt == "8I":
                     raise Exception("Test error")
                 return original_pack(fmt, *args)
 
@@ -988,6 +996,31 @@ class TestStatusCounter(unittest.TestCase):
             self.assertEqual(counter.status_queue.qsize(), 1)
 
         asyncio.run(run_test())
+
+    def test_badcase_without_queue(self):
+        """没有队列时 badcase 事件被忽略。"""
+        counter = StatusCounter(batch_size=0)
+
+        asyncio.run(counter.badcase(120, 34.5))
+
+        self.assertEqual(counter.badcase_req, 0)
+        self.assertEqual(counter.wasted_chars, 0)
+        self.assertEqual(counter.wasted_ms, 0.0)
+
+    def test_badcase_with_queue(self):
+        """badcase 事件携带重复字符数与浪费毫秒并被累加。"""
+        counter = StatusCounter(batch_size=10)
+
+        async def run_test():
+            await counter.badcase(120, 34.5)
+            self.assertEqual(counter.status_queue.qsize(), 1)
+
+        asyncio.run(run_test())
+
+        counter._apply_status(counter.status_queue.get_nowait())
+        self.assertEqual(counter.badcase_req, 1)
+        self.assertEqual(counter.wasted_chars, 120)
+        self.assertEqual(counter.wasted_ms, 34.5)
 
     def test_rev_without_queue(self):
         """测试StatusCounter的rev方法在没有队列时直接更新计数"""

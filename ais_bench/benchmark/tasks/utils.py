@@ -45,7 +45,7 @@ def create_message_share_memory():
     shm = shared_memory.SharedMemory(create=True, size=MESSAGE_SIZE)
     buf = shm.buf
     # Set flag to 2, indicating child process is ready for first batch data deserialization
-    buf[:] = struct.pack(FMT, 0, 0, 0, 0, 0, 0)
+    buf[:] = struct.pack(FMT, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     return shm
 
 
@@ -111,6 +111,7 @@ class ProgressBar:
         pressure: bool = False,
         pressure_time: int = 15,
         refresh_interval: float = 1.0,
+        online_badcase_enabled: bool = False,
     ):
         self.logger = AISLogger()
         self.debug = debug
@@ -127,10 +128,29 @@ class ProgressBar:
         self.pressure = pressure
         self.pressure_time = pressure_time
         self.refresh_interval = refresh_interval
+        self.online_badcase_enabled = online_badcase_enabled
 
         self.per_pid_stats: Dict[int, Dict[str, int]] = {}
-        self.stats = {"post": 0, "recv": 0, "fail": 0, "finish": 0, "case_finish": 0}
-        self._keys = ("post", "recv", "fail", "finish", "case_finish")
+        self.stats = {
+            "post": 0,
+            "recv": 0,
+            "fail": 0,
+            "finish": 0,
+            "case_finish": 0,
+            "badcase": 0,
+            "wasted_chars": 0,
+            "wasted_ms": 0,
+        }
+        self._keys = (
+            "post",
+            "recv",
+            "fail",
+            "finish",
+            "case_finish",
+            "badcase",
+            "wasted_chars",
+            "wasted_ms",
+        )
 
         self.start_time = time.perf_counter()
         self._last_snapshot_time = self.start_time
@@ -145,6 +165,16 @@ class ProgressBar:
                 agg[k] += int(st.get(k, 0))
         self.stats = agg
 
+    def _online_badcase_kwargs(self) -> Dict[str, int]:
+        """Extra task-state counters, only present when detection is enabled."""
+        if not self.online_badcase_enabled:
+            return {}
+        return {
+            "BADCASE": self.stats["badcase"],
+            "WASTED_CHARS": self.stats["wasted_chars"],
+            "WASTED_MS": self.stats["wasted_ms"],
+        }
+
     def _read_shared_memory_and_update_per_pid(self) -> bool:
         """Read shared memory and update per-pid statistics.
 
@@ -155,13 +185,26 @@ class ProgressBar:
         # Iterate over a snapshot of keys to allow external mapping mutations
         for pid, shm in self.per_pid_shms.items():
             raw = bytes(shm.buf[:MESSAGE_SIZE])
-            _, post, recv, fail, finish, case_finish = struct.unpack(FMT, raw)
+            (
+                _,
+                post,
+                recv,
+                fail,
+                finish,
+                case_finish,
+                badcase,
+                wasted_chars,
+                wasted_ms,
+            ) = struct.unpack(FMT, raw)
             normalized = {
                 "post": max(0, int(post)),
                 "recv": max(0, int(recv)),
                 "fail": max(0, int(fail)),
                 "finish": max(0, int(finish)),
                 "case_finish": max(0, int(case_finish)),
+                "badcase": max(0, int(badcase)),
+                "wasted_chars": max(0, int(wasted_chars)),
+                "wasted_ms": max(0, int(wasted_ms)),
             }
             prev = self.per_pid_stats.get(pid)
             if prev != normalized:
@@ -251,6 +294,11 @@ class ProgressBar:
                         f"RECV={self.stats['recv']} ({rates['recv']:.1f}/s)  "
                         f"FAIL={self.stats['fail']} ({rates['fail']:.1f}/s)  "
                         f"FIN={self.stats['finish']} ({rates['finish']:.1f}/s)   "
+                        + (
+                            f"BADCASE={self.stats['badcase']}   "
+                            if self.online_badcase_enabled
+                            else ""
+                        )
                     )
                     if self.pressure and main_bar.n == total:
                         info += "The time for pressure testing has arrived. Waiting for sent requests to complete..."
@@ -272,6 +320,11 @@ class ProgressBar:
                 f"RECV={self.stats['recv']} ({rates['recv']:.1f}/s)  "
                 f"FAIL={self.stats['fail']} ({rates['fail']:.1f}/s)  "
                 f"FINISH={self.stats['finish']} ({rates['finish']:.1f}/s)   "
+                + (
+                    f"BADCASE={self.stats['badcase']}   "
+                    if self.online_badcase_enabled
+                    else ""
+                )
             )
             info_bar.set_description_str(info)
             info_bar.refresh()
@@ -317,6 +370,7 @@ class ProgressBar:
                         "RECV": self.stats["recv"],
                         "FINISH": self.stats["finish"],
                         "FAIL": self.stats["fail"],
+                        **self._online_badcase_kwargs(),
                     },
                 }
                 if finish_rate > 0:
@@ -338,6 +392,7 @@ class ProgressBar:
                 "RECV": self.stats["recv"],
                 "FINISH": self.stats["finish"],
                 "FAIL": self.stats["fail"],
+                **self._online_badcase_kwargs(),
             },
         }
         task_state_manager.update_task_state(state)

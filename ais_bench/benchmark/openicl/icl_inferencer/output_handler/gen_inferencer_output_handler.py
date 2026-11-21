@@ -70,6 +70,8 @@ class GenInferencerOutputHandler(BaseInferencerOutputHandler):
         }
         if isinstance(output, Output) and output.extra_details_data.get('response_anomaly_payload'):
             result_data['response_anomaly_payload'] = output.extra_details_data['response_anomaly_payload']
+        if isinstance(output, Output) and output.extra_details_data.get('online_badcase'):
+            result_data['online_badcase'] = output.extra_details_data['online_badcase']
 
         if isinstance(output, Output):
             result_data["start_time"] = output.start_time

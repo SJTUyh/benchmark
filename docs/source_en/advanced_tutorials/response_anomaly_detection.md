@@ -172,6 +172,40 @@ Semantics:
 
 ---
 
+## Online Badcase Detection (`--response-anomaly online`)
+
+`--response-anomaly online` enables in-flight, text-level, logprob-free repetition/loop detection to catch degenerate outputs early and avoid wasting benchmark time.
+
+- **No msProbe**: no `logprobs` / `top_logprobs` injection, no msProbe resource validation/generation, no payload output.
+- **Supported modes**: `all`, `infer`, `infer_judge`, `perf`, `perf_viz`, `pressure`; only service models (`attr="service"`) are supported.
+- **Policy**:
+  - Streaming hit → close the connection and abort generation; the case is marked failed (`success=False`) while keeping the generated text and tag;
+  - Non-streaming cannot abort → tag only after completion;
+  - `perf` / `pressure` only tag and count (no early stop) to keep throughput/latency metrics clean.
+
+### Thresholds
+
+Override the defaults under `response_anomaly.online` in the config file:
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `min_chars` | 200 | Minimum generated length before detection |
+| `window_chars` | 400 | Tail detection window |
+| `check_interval_chars` | 32 | Check step |
+| `min_period` / `max_period` | 1 / 32 | Short-cycle range |
+| `min_repeats` | 4 | Minimum consecutive repeats |
+| `min_repeated_chars` | 120 | Minimum repeated segment length |
+| `long_segment_chars` | 160 | Long-segment comparison length |
+| `abort` | true | Whether streaming may abort early |
+
+### Results and live reporting
+
+- Accuracy mode: the tag is written to the `online_badcase` field of `predictions/<model>/<dataset>.jsonl` (failed cases go to `_failed.jsonl`), containing `reason`, `period`, `detected_at_chars`, `total_chars`, `repeat_chars`, `wasted_ms`, `aborted`, `max_out_len_hit`.
+- Performance mode: `online_badcase` appears in `<dataset>_details.jsonl` via `extra_details_data`.
+- Live counters: the terminal progress line shows `BADCASE=`; with `--monitor-port <port>`, `GET /api/tasks` exposes `BADCASE`, `WASTED_CHARS`, `WASTED_MS` in `other_kwargs` (these keys are absent when detection is off).
+
+---
+
 ## Resuming Runs
 
 When using `--reuse`, existing detection results are inherited by matching both the Case `id` and `uuid` (a changed `uuid` means the Case was re-inferred, so it never gets a stale result):

@@ -116,6 +116,11 @@ class MultiTurnGenInferencer(BaseApiInferencer, BaseLocalInferencer):
         max_out_len = max_out_len[-1] if isinstance(max_out_len, list) else max_out_len
         await self.status_counter.post()
         await self.model.generate(history, max_out_len, output, session=session, **data)
+        badcase = output.extra_details_data.get('online_badcase')
+        if badcase:
+            await self.status_counter.badcase(
+                badcase.get('repeat_chars', 0), badcase.get('wasted_ms', 0.0)
+            )
         if output.success:
             await self.status_counter.rev()
         else:
@@ -150,6 +155,11 @@ class MultiTurnGenInferencer(BaseApiInferencer, BaseLocalInferencer):
             max_out_len = max_out_len[turn_id] if isinstance(max_out_len, list) else max_out_len
             await self.status_counter.post()
             await self.model.generate(history, max_out_len, output, session=session, **data)
+            badcase = output.extra_details_data.get('online_badcase')
+            if badcase:
+                await self.status_counter.badcase(
+                    badcase.get('repeat_chars', 0), badcase.get('wasted_ms', 0.0)
+                )
             turn_id += 1
             if output.success:
                 await self.status_counter.rev()
@@ -190,6 +200,11 @@ class MultiTurnGenInferencer(BaseApiInferencer, BaseLocalInferencer):
             max_out_len = max_out_len[turn_id] if isinstance(max_out_len, list) else max_out_len
             await self.status_counter.post()
             await self.model.generate(history, max_out_len, output, session=session, **data)
+            badcase = output.extra_details_data.get('online_badcase')
+            if badcase:
+                await self.status_counter.badcase(
+                    badcase.get('repeat_chars', 0), badcase.get('wasted_ms', 0.0)
+                )
             turn_id += 1
             if output.success:
                 await self.status_counter.rev()

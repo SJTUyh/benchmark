@@ -18,6 +18,7 @@ from ais_bench.benchmark.cli.utils import (
     recur_convert_config_type,
 )
 from ais_bench.benchmark.utils.response_anomaly import ResponseAnomalyCoordinator
+from ais_bench.benchmark.utils.online_badcase import DEFAULT_CONFIG as ONLINE_BADCASE_DEFAULTS
 from ais_bench.benchmark.utils.perf_manifest import MANIFEST_FILENAME
 from ais_bench.benchmark.cli.sweep import (
     _normalize_sweep_arg,
@@ -188,6 +189,14 @@ class ConfigManager:
         if not global_cfg['enabled']:
             return
 
+        if global_cfg.get('mode') == 'online':
+            self._validate_online_badcase_support()
+            service_models = self._get_response_anomaly_service_models()
+            if service_models is None:
+                return
+            self._inject_online_badcase_config(service_models, global_cfg)
+            return
+
         self._validate_response_anomaly_top_logprobs(configured_top_logprobs)
         self._validate_response_anomaly_support()
         self._validate_response_anomaly_payload_config(global_cfg)
@@ -203,6 +212,8 @@ class ConfigManager:
         """Add runtime payload storage settings to supported model configs."""
         anomaly_cfg = self.cfg.get('response_anomaly') or {}
         if not anomaly_cfg.get('enabled', False):
+            return
+        if anomaly_cfg.get('mode', 'msprobe') != 'msprobe':
             return
         models = self.cfg.get('models')
         if not isinstance(models, list):
@@ -232,11 +243,19 @@ class ConfigManager:
                 "value is ignored."
             )
             global_cfg.pop('enabled')
-        # Strictly a real boolean from the CLI; anything else (missing
-        # attribute, mocks) means the switch was not passed -> disabled.
-        cli_enabled = getattr(self.args, 'response_anomaly', False)
-        global_cfg['enabled'] = cli_enabled if isinstance(cli_enabled, bool) else False
+        # The CLI switch is the only enable path: False -> disabled,
+        # True/'msprobe' -> offline msProbe audit, 'online' -> in-flight
+        # repetition detection. Anything else (missing attribute, mocks)
+        # means the switch was not passed.
+        cli_value = getattr(self.args, 'response_anomaly', False)
+        mode = self._response_anomaly_mode_from_cli(cli_value)
+        global_cfg['mode'] = mode
+        global_cfg['enabled'] = mode is not None
         configured_top_logprobs = global_cfg.pop('top_logprobs', None)
+        if mode == 'online':
+            global_cfg['online'] = self._normalize_online_badcase_config(
+                global_cfg.get('online')
+            )
         global_cfg.setdefault('msprobe_config_path', None)
         cli_payload_retention = getattr(
             self.args, 'response_anomaly_payload_retention', None
@@ -251,6 +270,57 @@ class ConfigManager:
         payload_storage.setdefault('rows_per_shard', 2000)
         global_cfg['payload_storage'] = payload_storage
         return global_cfg, configured_top_logprobs
+
+    @staticmethod
+    def _response_anomaly_mode_from_cli(raw):
+        """Map the CLI value to 'msprobe', 'online', or None (disabled)."""
+        if raw is True or raw == 'msprobe':
+            return 'msprobe'
+        if raw == 'online':
+            return 'online'
+        return None
+
+    def _normalize_online_badcase_config(self, raw_online_cfg):
+        """Apply defaults and type validation to response_anomaly.online."""
+        online = dict(raw_online_cfg) if isinstance(raw_online_cfg, dict) else {}
+        for key, default in ONLINE_BADCASE_DEFAULTS.items():
+            online.setdefault(key, default)
+        positive_int_keys = (
+            'min_chars',
+            'window_chars',
+            'check_interval_chars',
+            'min_period',
+            'max_period',
+            'min_repeats',
+            'min_repeated_chars',
+            'long_segment_chars',
+        )
+        for key in positive_int_keys:
+            value = online[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value <= 0
+            ):
+                raise AISBenchConfigError(
+                    TMAN_CODES.UNKNOWN_ERROR,
+                    f"response_anomaly.online.{key} must be a positive "
+                    f"integer, got {value!r}.",
+                )
+        if online['max_period'] < online['min_period']:
+            raise AISBenchConfigError(
+                TMAN_CODES.UNKNOWN_ERROR,
+                "response_anomaly.online.max_period must be greater than or "
+                f"equal to min_period, got {online['max_period']} < "
+                f"{online['min_period']}.",
+            )
+        if not isinstance(online['abort'], bool):
+            raise AISBenchConfigError(
+                TMAN_CODES.UNKNOWN_ERROR,
+                "response_anomaly.online.abort must be a boolean, got "
+                f"{online['abort']!r}.",
+            )
+        return online
 
     @staticmethod
     def _validate_response_anomaly_top_logprobs(configured_top_logprobs):
@@ -329,6 +399,63 @@ class ConfigManager:
                 "Response anomaly detection requires service models (attr='service').",
             )
         return service_models
+
+    def _validate_online_badcase_support(self):
+        """Online detection is text-level and only plugs into API models."""
+        self._validate_online_badcase_mode()
+        self._validate_response_anomaly_infer_task()
+        self._validate_online_badcase_models()
+        self._validate_response_anomaly_datasets()
+
+    def _validate_online_badcase_mode(self):
+        """Allow online detection in inference/perf workflows only."""
+        mode = getattr(self.args, 'mode', 'all')
+        supported = ('all', 'infer', 'infer_judge', 'perf', 'perf_viz', 'pressure')
+        if isinstance(mode, str) and mode not in supported:
+            raise AISBenchConfigError(
+                TMAN_CODES.UNKNOWN_ERROR,
+                f"online badcase detection is not supported in mode '{mode}'; "
+                f"supported modes are {', '.join(supported)}.",
+            )
+
+    def _validate_online_badcase_models(self):
+        """Reject Agent and local (non-service) models."""
+        models = self.cfg.get('models')
+        if not isinstance(models, list):
+            return
+        agent_keys = ('agent', 'agent_name', 'llm_agent', 'llm_user')
+        for model_cfg in models:
+            if not isinstance(model_cfg, dict):
+                continue
+            if any(key in model_cfg for key in agent_keys):
+                raise AISBenchConfigError(
+                    TMAN_CODES.UNKNOWN_ERROR,
+                    "online badcase detection is not supported for Agent "
+                    f"models (model abbr='{model_cfg.get('abbr', '')}').",
+                )
+            if model_cfg.get('attr', 'service') != 'service':
+                raise AISBenchConfigError(
+                    TMAN_CODES.UNKNOWN_ERROR,
+                    "online badcase detection is only supported for service "
+                    "(API) models; model abbr="
+                    f"'{model_cfg.get('abbr', '')}' has attr="
+                    f"'{model_cfg.get('attr')}'. Use an API model config "
+                    "(e.g. vllm_api_general_chat / vllm_api_stream_chat).",
+                )
+
+    def _inject_online_badcase_config(self, service_models, global_cfg):
+        """Attach the detector config to each service model's request kwargs."""
+        online_cfg = dict(global_cfg.get('online') or {})
+        for model_cfg in service_models:
+            generation_kwargs = model_cfg.setdefault('generation_kwargs', {})
+            if not isinstance(generation_kwargs, dict):
+                raise AISBenchConfigError(
+                    TMAN_CODES.UNKNOWN_ERROR,
+                    "online badcase detection is enabled but model "
+                    f"'{model_cfg.get('abbr', '')}' has invalid "
+                    "generation_kwargs; expected a dict.",
+                )
+            generation_kwargs['online_badcase'] = dict(online_cfg)
 
     def _warn_shared_response_anomaly_model_name(
         self, global_cfg, service_models

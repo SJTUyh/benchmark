@@ -418,6 +418,15 @@ class BaseInferencerOutputHandler:
                             for key in ("start_time", "end_time", "input_tokens", "output_tokens"):
                                 if key in result_data:
                                     fail_data[key] = result_data[key]
+                            if result_data.get("online_badcase"):
+                                # Keep the partial generation and the detection
+                                # tag for aborted online-badcase cases.
+                                fail_data["prediction"] = result_data.get(
+                                    "prediction"
+                                )
+                                fail_data["online_badcase"] = result_data[
+                                    "online_badcase"
+                                ]
                             self.failed_results_dict[data_abbr][uid] = fail_data
 
                         # Pre-compute JSON string to avoid repeated serialization

@@ -1028,6 +1028,95 @@ class TestConfigManager(unittest.TestCase):
         )
         self.assertNotIn('response_anomaly_payload_storage', local_model)
 
+    def test_online_badcase_injects_detector_without_logprobs(self):
+        """online 模式只注入检测参数，不注入 logprobs / payload 配置。"""
+        self.args.mode = 'infer'
+        self.args.response_anomaly = 'online'
+        config_manager = ConfigManager(self.args)
+        service_model = self._service_model()
+        config_manager.cfg = {
+            'models': [service_model],
+            'datasets': [{'abbr': 'dataset'}],
+            'cli_args': {},
+        }
+
+        config_manager._init_response_anomaly_config()
+
+        self.assertEqual(config_manager.cfg['response_anomaly']['mode'], 'online')
+        self.assertTrue(config_manager.cfg['response_anomaly']['enabled'])
+        generation_kwargs = service_model['generation_kwargs']
+        self.assertNotIn('logprobs', generation_kwargs)
+        self.assertNotIn('top_logprobs', generation_kwargs)
+        self.assertNotIn('response_anomaly_enabled', generation_kwargs)
+        online_cfg = generation_kwargs['online_badcase']
+        self.assertEqual(online_cfg['min_chars'], 200)
+        self.assertEqual(online_cfg['window_chars'], 400)
+        self.assertTrue(online_cfg['abort'])
+        self.assertNotIn('response_anomaly_payload_storage', service_model)
+
+    def test_online_badcase_allowed_in_perf_mode(self):
+        """online 模式允许 perf / pressure，早停由使用方按 perf_mode 关闭。"""
+        self.args.mode = 'perf'
+        self.args.response_anomaly = 'online'
+        config_manager = ConfigManager(self.args)
+        config_manager.cfg = {
+            'models': [self._service_model()],
+            'datasets': [{'abbr': 'dataset'}],
+            'cli_args': {},
+        }
+
+        config_manager._init_response_anomaly_config()
+
+        self.assertEqual(config_manager.cfg['response_anomaly']['mode'], 'online')
+
+    def test_online_badcase_rejected_for_local_model(self):
+        """online 模式仅支持 service 模型。"""
+        self.args.mode = 'infer'
+        self.args.response_anomaly = 'online'
+        config_manager = ConfigManager(self.args)
+        config_manager.cfg = {
+            'models': [{'abbr': 'local-model', 'attr': 'local'}],
+            'datasets': [{'abbr': 'dataset'}],
+            'cli_args': {},
+        }
+
+        with self.assertRaises(AISBenchConfigError):
+            config_manager._init_response_anomaly_config()
+
+    def test_online_badcase_rejects_invalid_threshold(self):
+        """online 子配置阈值必须为正整数。"""
+        self.args.mode = 'infer'
+        self.args.response_anomaly = 'online'
+        config_manager = ConfigManager(self.args)
+        config_manager.cfg = {
+            'response_anomaly': {'online': {'min_chars': 'bad'}},
+            'models': [self._service_model()],
+            'datasets': [{'abbr': 'dataset'}],
+            'cli_args': {},
+        }
+
+        with self.assertRaises(AISBenchConfigError):
+            config_manager._init_response_anomaly_config()
+
+    def test_online_badcase_skips_msprobe_top_logprobs_validation(self):
+        """online 模式不校验 msProbe 专属的 top_logprobs。"""
+        self.args.mode = 'infer'
+        self.args.response_anomaly = 'online'
+        config_manager = ConfigManager(self.args)
+        config_manager.cfg = {
+            'response_anomaly': {'top_logprobs': 5},
+            'models': [self._service_model()],
+            'datasets': [{'abbr': 'dataset'}],
+            'cli_args': {},
+        }
+
+        config_manager._init_response_anomaly_config()
+
+        self.assertNotIn(
+            'top_logprobs',
+            config_manager.cfg['models'][0]['generation_kwargs'],
+        )
+
     def test_response_anomaly_skips_payload_storage_when_disabled(self):
         """异常检测关闭时不向模型配置添加运行时字段。"""
         config_manager = ConfigManager(self.args)
